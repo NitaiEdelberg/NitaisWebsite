@@ -33,7 +33,7 @@ const Navbar = () => {
             }
             bgClip={"text"}
             >
-            <Link to={"/"}>Product Store 🛒 </Link>
+            <Link to={"/"}>Nitai's Products Store 🛒 </Link>
           </Text>
 
           <HStack spacing={2} alignItems={"center"}>
