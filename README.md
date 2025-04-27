@@ -10,7 +10,7 @@ Welcome to Nitai's Movie Watchlist — a full-stack web application where you ca
 
 ---
 
-## 📚 Project Description
+## Project Description
 
 This project is a full-stack application built with:
 
@@ -27,7 +27,7 @@ Users can:
 
 ---
 
-## 🧱 Tech Stack
+## Tech Stack
 
 | Frontend | Backend | Database | Other |
 |----------|---------|----------|-------|
@@ -158,7 +158,7 @@ All API endpoints are prefixed with `/api/movies`
 
 ---
 
-## ✨ Future Improvements
+## Future Improvements
 
 - Authentication system (users login/signup)
 - Public sharing of movie lists
@@ -170,11 +170,7 @@ All API endpoints are prefixed with `/api/movies`
 
 ## 📸 Screenshot
 
-(You can add a screenshot here if you want)
-
-```markdown
 ![App Screenshot](./frontend/public/screenshot.png)
-```
 
 ---
 
