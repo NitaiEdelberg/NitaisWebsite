@@ -54,7 +54,7 @@ export const deleteMovie = async (req, res) => {
     }    
 
     try {
-        await movie.findByIdAndDelete(id);
+        await Movie.findByIdAndDelete(id);
         res.status(200).json({success: true, message: "Movie deleted successfully"});
     } catch(error) {
         console.log("Error in delete movie", error.message);
