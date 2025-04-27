@@ -70,7 +70,7 @@ const MovieCard = ({movie}) => {
                 {movie.name}({movie.year})
             </Heading>
             <Text fontWeight='bold' fontSize='xl' color={textColor} mb={4}>
-            Grade: {movie.grade ? movie.grade + "/10" : "Not rated yet."}
+            Grade: {movie.grade ? movie.grade  : "Not rated yet."}
             </Text>
             <Text color={textColor} mb={4}>
                 {movie.note || "No note yet."}
