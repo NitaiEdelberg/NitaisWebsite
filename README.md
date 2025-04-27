@@ -27,23 +27,12 @@ Users can:
 
 ---
 
-## 🛠 Features
-
-- ⭐ Star rating per movie
-- 📝 Personal notes
-- 📅 Release year info
-- 🖼 Poster upload via image URL
-- 🔄 Edit and delete movies dynamically
-- 📦 Deployed on **Render.com**
-
----
-
 ## 🧱 Tech Stack
 
 | Frontend | Backend | Database | Other |
 |----------|---------|----------|-------|
 | React + Vite | Express.js | MongoDB Atlas | Chakra UI |
-| Zustand (global state) | Node.js | Mongoose ODM | Render Deployment |
+| Zustand (global state) | Node.js | | Render Deployment |
 
 ---
 
