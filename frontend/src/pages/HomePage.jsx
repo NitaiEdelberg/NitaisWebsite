@@ -1,16 +1,16 @@
 import { Container, VStack, Text, SimpleGrid } from '@chakra-ui/react'
 import React, { useEffect } from 'react'
 import { Link } from 'react-router-dom';
-import { useProductStore } from '../store/product';
-import ProductCard from '../components/ProductCard';
+import { useMovieStore } from '../store/movie';
+import MovieCard from '../components/MovieCard';
 
 const HomePage = () => {
-  const { fetchProducts, products } = useProductStore();
+  const { fetchMovies: fetchMovies, movies: movies } = useMovieStore();
 
   useEffect(() => {
-    fetchProducts();
-    }, [fetchProducts]);
-    console.log("products", products);
+    fetchMovies();
+    }, [fetchMovies]);
+    console.log("movies", movies);
 
   return (
     <Container maxW='container.xl' py={12}>
@@ -24,7 +24,7 @@ const HomePage = () => {
             }
             bgClip={"text"}
         >
-          Current Products 🚀
+          Movies To Watch 🎬
       </Text>
 
       <SimpleGrid
@@ -32,17 +32,17 @@ const HomePage = () => {
         spacing={10}
         w='full'
       >
-        {products.map((product) => (
-          <ProductCard key={product.id} product={product} />
+        {movies.map((movie) => (
+          <MovieCard key={movie.id} movie={movie} />
         ))}
       </SimpleGrid>
 
-     {products.length === 0 && (
+     {movies.length === 0 && (
        <Text fontSize='xl' textAlign='center' fontWeight='bold' color='gray.500'>
-       No products available at the moment. Please check back later! 😢 {" "}
+       No movies available at the moment. Please check back later! 😢 {" "}
        <Link to={"/create"}>
          <Text as='span' color='blue.500' _hover={{ textDecoration: 'underline' }}>
-           Add a new product
+           Add a new movie
          </Text>
        </Link>
  </Text>

@@ -1,19 +1,19 @@
 import { Box, Button, Heading, HStack, IconButton, Image, Input, Modal, ModalBody, ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalOverlay, Text, useColorModeValue, useDisclosure, useToast, VStack } from '@chakra-ui/react';
 import { DeleteIcon, EditIcon } from '@chakra-ui/icons';
 import React, { useState } from 'react'
-import { useProductStore } from '../store/product';
+import { useMovieStore } from '../store/movie';
 
-const ProductCard = ({product}) => {
-    const [updatedProduct, setUpdatedProduct] = useState(product);
+const MovieCard = ({movie}) => {
+    const [updatedMovie, setUpdatedMovie] = useState(movie);
     const textColor = useColorModeValue('gray.600', 'gray.200');
     const bg=useColorModeValue('white', 'gray.800');
 
-    const { deleteProduct, updateProduct } = useProductStore();
+    const { deleteMovie, updateMovie } = useMovieStore();
     const toast = useToast();
     const {isOpen, onOpen, onClose} = useDisclosure();
 
-    const handleDeleteProduct = async (pid) => {
-        const {success, message} = await deleteProduct(pid);
+    const handleDeleteMovie = async (pid) => {
+        const {success, message} = await deleteMovie(pid);
         if(!success) {
             toast({
                 title: "Error",
@@ -33,8 +33,8 @@ const ProductCard = ({product}) => {
         }
     }
 
-    const handleUpdateProduct = async (pid, updatedProduct) => {
-        const {success, message} = await updateProduct(pid, updatedProduct);
+    const handleUpdateMovie = async (pid, updatedMovie) => {
+        const {success, message} = await updateMovie(pid, updatedMovie);
         onClose();
         if(!success) {
             toast({
@@ -46,7 +46,7 @@ const ProductCard = ({product}) => {
             });
         } else {
             toast({
-                title: "Product Updated Successfully",
+                title: "movie Updated Successfully",
                 description: message,
                 status: "success",
                 duration: 3000,
@@ -63,21 +63,21 @@ const ProductCard = ({product}) => {
     _hover={{ transform: "translateY(-5px)", shadow: 'xl' }}
     bg={bg}
     >
-        <Image src={product.image} alt={product.name} h={48} w='full' objectFit='cover' />
+        <Image src={movie.image} alt={movie.name} h={48} w='full' objectFit='cover' />
 
         <Box p={4}>
             <Heading as='h3' size='md' mb={2}>
-                {product.name}({product.price})
+                {movie.name}({movie.year})
             </Heading>
             <Text fontWeight='bold' fontSize='xl' color={textColor} mb={4}>
-            Grade: {product.grade ? product.grade + "/10" : "N/A"}
+            Grade: {movie.grade ? movie.grade + "/10" : "Not rated yet."}
             </Text>
             <Text color={textColor} mb={4}>
-                {product.note || "No note yet."}
+                {movie.note || "No note yet."}
             </Text>
             <HStack spacing={2}>
                 <IconButton icon={<EditIcon />} onClick={onOpen} colorScheme='blue'/>
-                <IconButton icon={<DeleteIcon />} onClick={() => handleDeleteProduct(product._id)} colorScheme='red'/>
+                <IconButton icon={<DeleteIcon />} onClick={() => handleDeleteMovie(movie._id)} colorScheme='red'/>
             </HStack>
         </Box>
 
@@ -85,17 +85,19 @@ const ProductCard = ({product}) => {
         <ModalOverlay />
 
             <ModalContent>
-                <ModalHeader>Update Product</ModalHeader>
+                <ModalHeader>Update movie</ModalHeader>
                 <ModalCloseButton />
                 <ModalBody>
                     <VStack spacing={4}>
-                        <Input placeholder='Product Name' name='name' value={updatedProduct.name} onChange={(e) => setUpdatedProduct({...updatedProduct,name: e.target.value})}/>
-                        <Input placeholder='Product Price' name='price' value={updatedProduct.price} onChange={(e) => setUpdatedProduct({...updatedProduct,price: e.target.value})}/>
-                        <Input placeholder='Product Image URL' name='image' value={updatedProduct.image} onChange={(e) => setUpdatedProduct({...updatedProduct,image: e.target.value})} />
+                        <Input placeholder='movie Name' name='name' value={updatedMovie.name} onChange={(e) => setUpdatedMovie({...updatedMovie,name: e.target.value})}/>
+                        <Input placeholder='Release Year' name='year' value={updatedMovie.year} onChange={(e) => setUpdatedMovie({...updatedMovie,year: e.target.value})}/>
+                        <Input placeholder='Poster Image URL' name='image' value={updatedMovie.image} onChange={(e) => setUpdatedMovie({...updatedMovie,image: e.target.value})} />
+                        <Input placeholder='Grade (1-10)' name='grade' type='number' min={1} max={10} value={updatedMovie.grade || ''} onChange={(e) => setUpdatedMovie({ ...updatedMovie, grade: e.target.value })} />
+                        <Input placeholder='Personal Note' name='note' value={updatedMovie.note || ''} onChange={(e) => setUpdatedMovie({ ...updatedMovie, note: e.target.value })} />
                     </VStack>
                 </ModalBody>
                 <ModalFooter>
-                    <Button colorScheme='blue' mr={3} onClick={() => handleUpdateProduct(product._id, updatedProduct)}>
+                    <Button colorScheme='blue' mr={3} onClick={() => handleUpdateMovie(movie._id, updatedMovie)}>
                         update
                     </Button>
                     <Button variant='ghost' onClick={onClose}>
@@ -110,4 +112,4 @@ const ProductCard = ({product}) => {
   )
 }
 
-export default ProductCard;
+export default MovieCard;

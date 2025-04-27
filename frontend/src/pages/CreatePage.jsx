@@ -1,11 +1,11 @@
 import { Box, Button, Container, Heading, Input, useColorModeValue, useToast, VStack } from '@chakra-ui/react';
 import React, { useState } from 'react'
-import { useProductStore } from '../store/product';
+import { useMovieStore } from '../store/movie';
 
 const CreatePage = () => {
-  const [newProduct, setNewProduct] = useState({
+  const [newMovie, setNewMovie] = useState({
     name: "",
-    price: "",
+    year: "",
     image: "",
     grade: "",
     note: ""
@@ -13,10 +13,10 @@ const CreatePage = () => {
 
   const toast = useToast()
 
-const {createProduct} = useProductStore()
+const {createMovie} = useMovieStore()
 
-  const handleAddProduct = async() => {
-    const {success,message} = await createProduct(newProduct);
+  const handleAddMovie = async() => {
+    const {success,message} = await createMovie(newMovie);
     if(!success) {
       toast({
         title: "Error",
@@ -32,9 +32,9 @@ const {createProduct} = useProductStore()
         isClosable: true
       })
     }
-    setNewProduct({
+    setNewMovie({
       name: "",
-      price: "",
+      year: "",
       image: ""
     })
   };
@@ -45,7 +45,7 @@ const {createProduct} = useProductStore()
           spacing={8}
         >
           <Heading as={"h1"} size={"2xl"} textAlign={"center"} mb={8}>
-            Create New Product
+            Add New Movie to Watch
           </Heading>
 
           <Box
@@ -57,22 +57,22 @@ const {createProduct} = useProductStore()
             <Input 
               placeholder='Movie Title'
               name='name'
-              value={newProduct.name}
-              onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+              value={newMovie.name}
+              onChange={(e) => setNewMovie({ ...newMovie, name: e.target.value })}
               />
               <Input 
               placeholder='Release Year'
-              name='price'
+              name='year'
               type='number'
               min={1920}
-              value={newProduct.price}
-              onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+              value={newMovie.year}
+              onChange={(e) => setNewMovie({ ...newMovie, year: e.target.value })}
               />
               <Input 
               placeholder='Image URL'
               name='image'
-              value={newProduct.image}
-              onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+              value={newMovie.image}
+              onChange={(e) => setNewMovie({ ...newMovie, image: e.target.value })}
               />
               <Input 
               placeholder='Grade (1-10)'
@@ -80,18 +80,18 @@ const {createProduct} = useProductStore()
               type='number'
               min={1}
               max={10}
-              value={newProduct.grade || ''}
-              onChange={(e) => setNewProduct({ ...newProduct, grade: e.target.value })}
+              value={newMovie.grade || ''}
+              onChange={(e) => setNewMovie({ ...newMovie, grade: e.target.value })}
               />
               <Input 
               placeholder='Personal Note'
               name='note'
-              value={newProduct.note || ''}
-              onChange={(e) => setNewProduct({ ...newProduct, note: e.target.value })}
+              value={newMovie.note || ''}
+              onChange={(e) => setNewMovie({ ...newMovie, note: e.target.value })}
               />
 
-            <Button colorScheme='blue' onClick={handleAddProduct} w='full'> 
-               Add Product
+            <Button colorScheme='blue' onClick={handleAddMovie} w='full'> 
+               Add Movie
             </Button>
 
             </VStack>

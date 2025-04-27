@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import path from "path";
 
-import productRoutes from "./routes/product.route.js";
+import movieRoutes from "./routes/movie.route.js";
 
 dotenv.config();
 
@@ -14,7 +14,7 @@ const __dirname = path.resolve(); // to get the current directory name
 
 app.use(express.json()); // allows to accept JSON data in the req.body
 
-app.use("/api/products",productRoutes);
+app.use("/api/movies",movieRoutes);
 // Serve frontend files in production
 if(process.env.NODE_ENV.trim() === "production"){
     app.use(express.static(path.join(__dirname,"/frontend/dist")));

@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
 
-const productSchema = new mongoose.Schema({
+const movieSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true
     },
-    price: {
+    year: {
         type: Number,
         required: true
     },
@@ -25,6 +25,6 @@ const productSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const Product = mongoose.model('Product', productSchema);
+const Movie = mongoose.model('Movie', movieSchema);
 
-export default Product;
+export default Movie;
