@@ -11,7 +11,7 @@ export const getMovies = async (req, res) => {
     }
 };
 
-export const creatMovie = async (req, res) => {
+export const createMovie = async (req, res) => {
     const movie = req.body; // data that the user will send
 
     if(!movie.name || !movie.year || !movie.image) {
