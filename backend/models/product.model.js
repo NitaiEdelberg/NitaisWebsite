@@ -13,6 +13,14 @@ const productSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    grade: {
+        type: Number,
+        required: false,
+    },
+    note: {
+        type: String,
+         required: false,
+        }
 }, {
     timestamps: true
 });

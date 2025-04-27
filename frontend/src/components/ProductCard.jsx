@@ -67,10 +67,13 @@ const ProductCard = ({product}) => {
 
         <Box p={4}>
             <Heading as='h3' size='md' mb={2}>
-                {product.name}
+                {product.name}({product.price})
             </Heading>
             <Text fontWeight='bold' fontSize='xl' color={textColor} mb={4}>
-                ${product.price}
+            Grade: {product.grade ? product.grade + "/10" : "N/A"}
+            </Text>
+            <Text color={textColor} mb={4}>
+                {product.note || "No note yet."}
             </Text>
             <HStack spacing={2}>
                 <IconButton icon={<EditIcon />} onClick={onOpen} colorScheme='blue'/>

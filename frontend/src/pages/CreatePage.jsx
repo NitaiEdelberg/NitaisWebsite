@@ -7,6 +7,8 @@ const CreatePage = () => {
     name: "",
     price: "",
     image: "",
+    grade: "",
+    note: ""
   });
 
   const toast = useToast()
@@ -53,16 +55,16 @@ const {createProduct} = useProductStore()
 
             <VStack spacing={4}>
             <Input 
-              placeholder='Product Name'
+              placeholder='Movie Title'
               name='name'
               value={newProduct.name}
               onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
               />
               <Input 
-              placeholder='Price'
+              placeholder='Release Year'
               name='price'
               type='number'
-              min={0}
+              min={1920}
               value={newProduct.price}
               onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
               />
@@ -71,6 +73,21 @@ const {createProduct} = useProductStore()
               name='image'
               value={newProduct.image}
               onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+              />
+              <Input 
+              placeholder='Grade (1-10)'
+              name='grade'
+              type='number'
+              min={1}
+              max={10}
+              value={newProduct.grade || ''}
+              onChange={(e) => setNewProduct({ ...newProduct, grade: e.target.value })}
+              />
+              <Input 
+              placeholder='Personal Note'
+              name='note'
+              value={newProduct.note || ''}
+              onChange={(e) => setNewProduct({ ...newProduct, note: e.target.value })}
               />
 
             <Button colorScheme='blue' onClick={handleAddProduct} w='full'> 
