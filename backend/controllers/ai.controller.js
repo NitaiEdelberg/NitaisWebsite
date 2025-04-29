@@ -1,37 +1,24 @@
-import fetch from 'node-fetch';
+import dotenv from 'dotenv';
+dotenv.config();
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export const getMovieRecommendation = async (req, res) => {
   const { prompt } = req.body;
-  
-  console.log("Prompt:", prompt);
-  console.log("COHERE_API_KEY:", process.env.COHERE_API_KEY ? 'Loaded ✅' : '❌ Not Loaded');
 
   try {
-    const response = await fetch('https://api.cohere.ai/generate', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.COHERE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: "command",
-          prompt: `Suggest a movie based on this: ${prompt}`,
-          max_tokens: 50
-        })
-      });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Cohere API error:", errText);
-      return res.status(500).json({ success: false, message: "Cohere API error" });
-    }
+    const result = await model.generateContent(`Suggest a movie based on this prompt: ${prompt}. Respond with just the movie title and year.`);
+    const response = await result.response;
+    const text = response.text().trim();
 
-    const data = await response.json();
-    const suggestion = data.generations[0].text.trim();
-    res.status(200).json({ success: true, suggestion });
+    res.status(200).json({ success: true, suggestion: text });
 
   } catch (error) {
-    console.error("AI recommendation error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Gemini AI error:", error.message);
+    res.status(500).json({ success: false, message: "Gemini API error", error: error.message });
   }
 };
