@@ -1,24 +1,46 @@
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
-
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export const getMovieRecommendation = async (req, res) => {
   const { prompt } = req.body;
 
   try {
-    const model = genAI.getGenerativeModel({ model: "models/gemini-pro" });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: `Suggest a movie based on this: ${prompt}. Respond with only the title and year.`,
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    );
 
-    const result = await model.generateContent(`Suggest a movie based on this prompt: ${prompt}. Respond with just the movie title and year.`);
-    const response = await result.response;
-    const text = response.text().trim();
+    const data = await response.json();
 
-    res.status(200).json({ success: true, suggestion: text });
+    if (!response.ok || !data.candidates || !data.candidates.length) {
+      console.error("Gemini API error:", data);
+      return res.status(500).json({
+        success: false,
+        message: "Gemini API error",
+        details: data,
+      });
+    }
 
-  } catch (error) {
-    console.error("Gemini AI error:", error.message);
-    res.status(500).json({ success: false, message: "Gemini API error", error: error.message });
+    const suggestion = data.candidates[0].content.parts[0].text.trim();
+    res.status(200).json({ success: true, suggestion });
+  } catch (err) {
+    console.error("Server error:", err.message);
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };
