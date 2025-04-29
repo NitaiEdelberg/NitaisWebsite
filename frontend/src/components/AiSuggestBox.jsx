@@ -20,13 +20,14 @@ const AiSuggestBox = () => {
   };
 
   return (
-    <Box mt={8} p={4} shadow='md' borderWidth='1px' borderRadius='md'>
+    <Box mt={10} p={6} maxW="2xl" w="full" mx="auto" borderWidth="1px" borderRadius="lg" shadow="lg">
       <VStack spacing={3}>
-        <Input 
-          placeholder="Describe what kind of movie you want..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
+      <Input
+      placeholder="Describe the movie you want..."
+      size="lg"
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      />
         <Button colorScheme='teal' onClick={getSuggestion} isLoading={loading}>
           Get AI Recommendation
         </Button>
