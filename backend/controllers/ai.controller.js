@@ -9,7 +9,7 @@ export const getMovieRecommendation = async (req, res) => {
   const { prompt } = req.body;
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "models/gemini-pro" });
 
     const result = await model.generateContent(`Suggest a movie based on this prompt: ${prompt}. Respond with just the movie title and year.`);
     const response = await result.response;
