@@ -11,6 +11,14 @@ const CreatePage = () => {
     note: ""
   });
 
+  useEffect(() => {
+    const saved = localStorage.getItem("aiSuggestedMovie");
+    if (saved) {
+      setNewMovie(JSON.parse(saved));
+      localStorage.removeItem("aiSuggestedMovie");
+    }
+  }, []);
+  
   const toast = useToast()
 
 const {createMovie} = useMovieStore()

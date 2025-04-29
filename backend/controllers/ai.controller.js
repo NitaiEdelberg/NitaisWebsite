@@ -17,7 +17,13 @@ export const getMovieRecommendation = async (req, res) => {
             {
               parts: [
                 {
-                  text: `Suggest a movie based on this: ${prompt}. Respond with only the title and year.`,
+                  text: `Suggest a movie based on this input: "${prompt}". 
+Respond in the following format only (no extra text, and Do not repeat suggestions from previous calls in the last hour):
+
+Title: [movie name]  
+Year: [release year]  
+Why you'll love it: [1-2 short sentences]
+                  `,
                 },
               ],
             },
@@ -30,15 +36,11 @@ export const getMovieRecommendation = async (req, res) => {
 
     if (!response.ok || !data.candidates || !data.candidates.length) {
       console.error("Gemini API error:", data);
-      return res.status(500).json({
-        success: false,
-        message: "Gemini API error",
-        details: data,
-      });
+      return res.status(500).json({ success: false, message: "Gemini API error", details: data });
     }
 
-    const suggestion = data.candidates[0].content.parts[0].text.trim();
-    res.status(200).json({ success: true, suggestion });
+    const responseText = data.candidates[0].content.parts[0].text.trim();
+    res.status(200).json({ success: true, recommendation: responseText });
   } catch (err) {
     console.error("Server error:", err.message);
     res.status(500).json({ success: false, message: "Server error", error: err.message });
