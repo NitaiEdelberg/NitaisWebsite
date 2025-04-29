@@ -3,6 +3,7 @@ import React, { useEffect } from 'react'
 import { Link } from 'react-router-dom';
 import { useMovieStore } from '../store/movie';
 import MovieCard from '../components/MovieCard';
+import AiSuggestBox from '../components/AiSuggestBox';
 
 const HomePage = () => {
   const { fetchMovies: fetchMovies, movies: movies } = useMovieStore();
@@ -36,6 +37,9 @@ const HomePage = () => {
           <MovieCard key={movie.id} movie={movie} />
         ))}
       </SimpleGrid>
+
+      <AiSuggestBox />
+
 
      {movies.length === 0 && (
        <Text fontSize='xl' textAlign='center' fontWeight='bold' color='gray.500'>

@@ -4,6 +4,7 @@ import { connectDB } from "./config/db.js";
 import path from "path";
 
 import movieRoutes from "./routes/movie.route.js";
+import aiRoutes from './routes/ai.route.js';
 
 dotenv.config();
 
@@ -13,6 +14,8 @@ const PORT = process.env.PORT || 5000;
 const __dirname = path.resolve(); // to get the current directory name
 
 app.use(express.json()); // allows to accept JSON data in the req.body
+
+app.use("/api/ai", aiRoutes);
 
 app.use("/api/movies",movieRoutes);
 // Serve frontend files in production
