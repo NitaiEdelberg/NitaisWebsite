@@ -17,13 +17,14 @@ export const getMovieRecommendation = async (req, res) => {
             {
               parts: [
                 {
-                  text: `Suggest a movie based on this input: "${prompt}". 
-Respond in the following format only (no extra text, and Do not repeat suggestions from previous calls in the last hour):
+                  text: `Suggest a movie based on this input: "${prompt}". Avoid recommending the same movie twice.
+Include a bit of randomness in your suggestion logic.
+Respond in this format:
 
 Title: [movie name]  
 Year: [release year]  
-Why you'll love it: [1-2 short sentences]
-                  `,
+Why you'll love it: [1-2 short sentences]`
+,
                 },
               ],
             },

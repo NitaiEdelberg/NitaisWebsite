@@ -1,5 +1,5 @@
 import { Box, Button, Container, Heading, Input, useColorModeValue, useToast, VStack } from '@chakra-ui/react';
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useMovieStore } from '../store/movie';
 
 const CreatePage = () => {
@@ -18,7 +18,7 @@ const CreatePage = () => {
       localStorage.removeItem("aiSuggestedMovie");
     }
   }, []);
-  
+
   const toast = useToast()
 
 const {createMovie} = useMovieStore()
