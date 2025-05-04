@@ -1,4 +1,4 @@
-import { Container, VStack, Text, SimpleGrid } from '@chakra-ui/react'
+import { Container, VStack, Text, SimpleGrid, Input } from '@chakra-ui/react'
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMovieStore } from '../store/movie';
@@ -31,7 +31,7 @@ const HomePage = () => {
           >
             Movies To Watch 🎬
           </Text>
-  
+        
           {/* search line*/}
           <Input
             placeholder="Search movies by name..."
