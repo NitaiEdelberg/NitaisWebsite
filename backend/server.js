@@ -5,6 +5,8 @@ import path from "path";
 
 import movieRoutes from "./routes/movie.route.js";
 import aiRoutes from './routes/ai.route.js';
+import authRoutes from './routes/auth.route.js';
+
 
 dotenv.config();
 
@@ -14,6 +16,9 @@ const PORT = process.env.PORT || 5000;
 const __dirname = path.resolve(); // to get the current directory name
 
 app.use(express.json()); // allows to accept JSON data in the req.body
+
+
+app.use('/api/auth', authRoutes);
 
 app.use("/api/ai", aiRoutes);
 
@@ -29,6 +34,6 @@ if(process.env.NODE_ENV.trim() === "production"){
 
 app.listen(PORT, () => {
     connectDB();
-    console.log("server started at http://localhost:" + PORT);
+    console.log("server started");
 })
 
