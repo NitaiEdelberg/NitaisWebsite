@@ -4,15 +4,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import { PlusSquareIcon } from '@chakra-ui/icons'
 import { IoMoon } from 'react-icons/io5'
 import { LuSun } from 'react-icons/lu'
+import { useMovieStore } from '../store/movie';
 
 const Navbar = () => {
   const { colorMode, toggleColorMode } = useColorMode();
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
+  const { logout } = useMovieStore();
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate(0); // reloads the page
+    logout();
+    navigate('/login'); // Redirect to login page after logout
   };
 
   return (

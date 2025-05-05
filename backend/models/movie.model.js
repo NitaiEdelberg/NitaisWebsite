@@ -20,7 +20,12 @@ const movieSchema = new mongoose.Schema({
     note: {
         type: String,
          required: false,
-        }
+    },
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+      }
 }, {
     timestamps: true
 });

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 
 export const getMovies = async (req, res) => {
     try {
-        const movies = await Movie.find({});
+        const movies = await Movie.find({ user: req.userId });
         res.status(200).json({success: true, data: movies});
     } catch (error) {
         console.log("Error in get movies", error.message);
@@ -18,7 +18,10 @@ export const createMovie = async (req, res) => {
         return res.status(400).json({ success:false, message: "Please fill all the fields" });
     }
 
-    const newMovie = new Movie(movie);
+    const newMovie = new Movie({
+        ...movie,
+        user: req.userId  // userId comes from the token in the request header
+      });
 
     try {
         await newMovie.save();
