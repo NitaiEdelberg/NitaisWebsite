@@ -9,9 +9,9 @@ const RegisterPage = () => {
   const navigate = useNavigate();
 
   //call api backend to register user
-  // POST /api/users/register
+  //Post request to /api/auth/register
   const handleRegister = async () => {
-    const res = await fetch('/api/users/register', {
+    const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
