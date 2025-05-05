@@ -9,8 +9,9 @@ const LoginPage = () => {
   const navigate = useNavigate();
 
   //call api backend to login user
+    //Post request to /api/auth/login
   const handleLogin = async () => {
-    const res = await fetch('/api/users/login', {
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
