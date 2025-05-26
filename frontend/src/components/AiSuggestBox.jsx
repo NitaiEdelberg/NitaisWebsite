@@ -8,6 +8,8 @@ import {
   VStack,
   HStack
 } from '@chakra-ui/react';
+import { useColorModeValue } from '@chakra-ui/react';
+
 
 const AiSuggestBox = () => {
   const [input, setInput] = useState('');
@@ -15,6 +17,7 @@ const AiSuggestBox = () => {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const bgColor = useColorModeValue('white', 'gray.800'); // Background color based on light/dark mode
 
   const getSuggestion = async () => {
     setLoading(true);
@@ -59,7 +62,7 @@ const AiSuggestBox = () => {
         </Button>
 
         {suggestion && (
-          <Box mt={6} p={4} bg="gray.100" rounded="md" w="full">
+          <Box mt={6} p={4} bg= {bgColor} rounded="md" w="full">
             <Text whiteSpace="pre-line" mb={3}>{suggestion}</Text>
             <HStack>
           <Button colorScheme="blue" onClick={handleAddClick}>Add to my movies</Button>
