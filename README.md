@@ -1,6 +1,6 @@
 # Nitai's Movie Watchlist 🎬⭐
 
-Welcome to Nitai's Movie Watchlist — a full-stack web application where you can save, update, and manage your favorite movies, add your personal rating (1-10 ⭐), and even leave a personal note!
+Welcome to Nitai's Movie Watchlist: a full-stack web application where you can save, update, and manage your favorite movies, add your personal rating (1-10), and even leave a personal note!
 
 ---
 
@@ -20,8 +20,8 @@ This project is a full-stack application built with:
 
 Users can:
 - Add new movies (title, release year, poster image)
-- Rate movies (1-10 ⭐)
-- Leave personal notes 📝
+- Rate movies (1-10)
+- Leave personal notes
 - Update or delete saved movies
 - Enjoy a fast, responsive UI
 
@@ -86,7 +86,7 @@ MONGO_URI=your-mongodb-connection-string
 PORT=5000
 ```
 
-✅ `.env` is already included in `.gitignore`.
+ `.env` is already included in `.gitignore`.
 
 ---
 
@@ -131,7 +131,7 @@ npm run start
 
 ---
 
-## 🔥 API Endpoints
+## API Endpoints
 
 All API endpoints are prefixed with `/api/movies`
 
@@ -154,7 +154,7 @@ All API endpoints are prefixed with `/api/movies`
 }
 ```
 
-✅ All fields are required except `grade` and `note` (they are optional).
+ All fields are required except `grade` and `note` (they are optional).
 
 ---
 
@@ -176,11 +176,11 @@ All API endpoints are prefixed with `/api/movies`
 
 ## 💬 Contact
 
-Made with ❤️ by [Nitai Edelberg](https://github.com/NitaiEdelberg)
+Made by [Nitai Edelberg](https://github.com/NitaiEdelberg)
 
 ---
 
-## ⭐ Acknowledgements
+## Acknowledgements
 
 - [Chakra UI](https://chakra-ui.com/)
 - [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
