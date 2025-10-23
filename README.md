@@ -10,7 +10,7 @@ Welcome to Nitai's Movie Watchlist: a full-stack web application where you can s
 
 ---
 
-## Project Description
+## Project Description:
 
 This project is a full-stack application built with:
 
@@ -36,7 +36,7 @@ Users can:
 
 ---
 
-## 📂 Project Structure
+## 📂 Project Structure:
 
 ```
 /frontend
@@ -186,4 +186,5 @@ Made by [Nitai Edelberg](https://github.com/NitaiEdelberg)
 - [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
 - [Render.com](https://render.com/)
 - [Icons8 Star Icon](https://icons8.com/icons/set/star)
+
 
