@@ -39,9 +39,18 @@ export const updateMovie = async (req, res) => {
 
     if(!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(404).json({ success:false, message: "Movie does not exist: Invalid Movie Id" });
-    }    
-    try { 
-        const updatedMovie = await Movie.findByIdAndUpdate(id, movie, {new: true});
+    }
+    try {
+        // Never let the client reassign ownership; only update movies owned by the caller.
+        const { user, _id, ...updates } = movie;
+        const updatedMovie = await Movie.findOneAndUpdate(
+            { _id: id, user: req.userId },
+            updates,
+            { new: true }
+        );
+        if (!updatedMovie) {
+            return res.status(404).json({ success: false, message: "Movie not found" });
+        }
         res.status(200).json({success: true, data: updatedMovie});
     } catch(error) {
         res.status(500).json({success:false, message:"Server Error"});
@@ -57,7 +66,10 @@ export const deleteMovie = async (req, res) => {
     }    
 
     try {
-        await Movie.findByIdAndDelete(id);
+        const deleted = await Movie.findOneAndDelete({ _id: id, user: req.userId });
+        if (!deleted) {
+            return res.status(404).json({ success: false, message: "Movie not found" });
+        }
         res.status(200).json({success: true, message: "Movie deleted successfully"});
     } catch(error) {
         console.log("Error in delete movie", error.message);

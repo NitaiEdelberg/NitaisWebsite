@@ -24,7 +24,7 @@ app.use("/api/ai", aiRoutes);
 
 app.use("/api/movies",movieRoutes);
 // Serve frontend files in production
-if(process.env.NODE_ENV.trim() === "production"){
+if((process.env.NODE_ENV || "").trim() === "production"){
     app.use(express.static(path.join(__dirname,"/frontend/dist")));
 // if the request is for any route other than /api/products, serve the index.html file
     app.get(/^\/(?!api).*$/, (req, res) => {

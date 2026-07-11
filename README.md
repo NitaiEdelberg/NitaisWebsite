@@ -19,10 +19,12 @@ This project is a full-stack application built with:
 - **Database**: MongoDB Atlas (with Mongoose)
 
 Users can:
+- Sign up and log in (JWT auth); each user has a private watchlist
 - Add new movies (title, release year, poster image)
 - Rate movies (1-10)
 - Leave personal notes
 - Update or delete saved movies
+- Get AI-powered movie recommendations (Google Gemini)
 - Enjoy a fast, responsive UI
 
 ---
@@ -160,7 +162,6 @@ All API endpoints are prefixed with `/api/movies`
 
 ## Future Improvements
 
-- Authentication system (users login/signup)
 - Public sharing of movie lists
 - Star filtering (e.g., show only 8+ rated movies)
 - Upload real image files instead of URL
