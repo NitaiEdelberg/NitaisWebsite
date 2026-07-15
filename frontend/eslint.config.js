@@ -31,4 +31,11 @@ export default [
       ],
     },
   },
+  {
+    // Test files use Vitest globals (vi, describe, it, expect) and Node's global.
+    files: ['**/*.test.{js,jsx}', 'src/test/**'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.vitest },
+    },
+  },
 ]

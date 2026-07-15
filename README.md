@@ -19,11 +19,14 @@ This project is a full-stack application built with:
 - **Database**: MongoDB Atlas (with Mongoose)
 
 Users can:
-- Add new movies (title, release year, poster image)
-- Rate movies (1-10)
+- Sign up / log in (each user gets their own private library)
+- Add new movies (title, release year, poster image — a poster is auto-generated if none is given)
+- Rate movies 1–10 with an interactive star picker
 - Leave personal notes
-- Update or delete saved movies
-- Enjoy a fast, responsive UI
+- Search and sort their library (recently added, highest rated, newest release, title)
+- Get AI-powered recommendations and save them in one tap
+- Toggle light / dark mode
+- Enjoy a fast, responsive, cinematic dark-first UI
 
 ---
 
@@ -158,13 +161,28 @@ All API endpoints are prefixed with `/api/movies`
 
 ---
 
+## Testing
+
+The frontend has a Vitest + React Testing Library suite (store logic, poster
+fallback, movie card, and home/landing states):
+
+```bash
+npm test --prefix frontend
+```
+
+To preview the frontend against the live backend without running Mongo locally:
+
+```bash
+VITE_PROXY_TARGET=https://nitaiswebsite.onrender.com npm run dev --prefix frontend
+```
+
+---
+
 ## Future Improvements
 
-- Authentication system (users login/signup)
 - Public sharing of movie lists
-- Star filtering (e.g., show only 8+ rated movies)
+- Filter by rating (e.g., show only 8+ rated movies)
 - Upload real image files instead of URL
-- Better mobile UI
 
 ---
 
