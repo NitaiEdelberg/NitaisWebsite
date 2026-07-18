@@ -32,16 +32,22 @@ export const createMovie = async (req, res) => {
     }
 };
 
-export const updateMovie = async (req, res) => { 
+export const updateMovie = async (req, res) => {
     const { id } = req.params;
 
     const movie = req.body;
+    // Never let the request body reassign ownership of the document.
+    delete movie.user;
 
     if(!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(404).json({ success:false, message: "Movie does not exist: Invalid Movie Id" });
-    }    
-    try { 
-        const updatedMovie = await Movie.findByIdAndUpdate(id, movie, {new: true});
+    }
+    try {
+        // Scope to the owner: a user can only update their own movies (prevents IDOR).
+        const updatedMovie = await Movie.findOneAndUpdate({ _id: id, user: req.userId }, movie, {new: true});
+        if(!updatedMovie) {
+            return res.status(404).json({ success:false, message: "Movie not found" });
+        }
         res.status(200).json({success: true, data: updatedMovie});
     } catch(error) {
         res.status(500).json({success:false, message:"Server Error"});
@@ -57,7 +63,11 @@ export const deleteMovie = async (req, res) => {
     }    
 
     try {
-        await Movie.findByIdAndDelete(id);
+        // Scope to the owner: a user can only delete their own movies (prevents IDOR).
+        const deleted = await Movie.findOneAndDelete({ _id: id, user: req.userId });
+        if(!deleted) {
+            return res.status(404).json({ success:false, message: "Movie not found" });
+        }
         res.status(200).json({success: true, message: "Movie deleted successfully"});
     } catch(error) {
         console.log("Error in delete movie", error.message);
