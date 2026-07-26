@@ -11,28 +11,24 @@ import {
   Image,
   InputGroup,
   InputRightElement,
+  Badge,
+  SimpleGrid,
   useToast,
 } from "@chakra-ui/react";
-import { FaMagic } from "react-icons/fa";
+import { FaMagic, FaStar } from "react-icons/fa";
 import { generatePoster } from "../utils/posterFallback";
-
-const parseSuggestion = (text) => {
-  const title = text.match(/Title:\s*(.*)/i)?.[1]?.trim() || "";
-  const year = text.match(/Year:\s*(.*)/i)?.[1]?.trim() || "";
-  const note =
-    text.match(/Why you'?ll love it:\s*([\s\S]*)/i)?.[1]?.trim() || "";
-  return { title, year, note };
-};
 
 const AiSuggestBox = () => {
   const [input, setInput] = useState("");
-  const [result, setResult] = useState(null);
-  const [raw, setRaw] = useState("");
+  const [movies, setMovies] = useState(null);
+  const [source, setSource] = useState("");
   const [loading, setLoading] = useState(false);
+  // Titles already shown, so "Suggest more" doesn't repeat them.
+  const [seen, setSeen] = useState([]);
   const navigate = useNavigate();
   const toast = useToast();
 
-  const getSuggestion = async () => {
+  const getSuggestions = async ({ more = false } = {}) => {
     if (!input.trim()) {
       toast({ title: "Describe what you're in the mood for first.", status: "info", duration: 2500 });
       return;
@@ -42,15 +38,21 @@ const AiSuggestBox = () => {
       const res = await fetch("/api/ai/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: input }),
+        body: JSON.stringify({ prompt: input, exclude: more ? seen : [] }),
       });
       const data = await res.json();
-      const text = data.recommendation || data.suggestion || "";
-      if (data.success && text) {
-        setRaw(text);
-        setResult(parseSuggestion(text));
+      if (data.success && Array.isArray(data.movies) && data.movies.length) {
+        setMovies(data.movies);
+        setSource(data.source || "");
+        setSeen((prev) => [...new Set([...prev, ...data.movies.map((m) => m.title)])]);
       } else {
-        toast({ title: "No suggestion available", description: "Try again in a moment.", status: "error", duration: 3000 });
+        setMovies([]);
+        toast({
+          title: "No verified matches",
+          description: data.message || "Try describing the vibe differently.",
+          status: "info",
+          duration: 3500,
+        });
       }
     } catch {
       toast({ title: "Could not reach the AI service", status: "error", duration: 3000 });
@@ -59,13 +61,13 @@ const AiSuggestBox = () => {
     }
   };
 
-  const handleAddClick = () => {
+  const addToLibrary = (m) => {
     const movie = {
-      name: result?.title || "",
-      year: result?.year || "",
-      image: "",
+      name: m.title || "",
+      year: m.year ? String(m.year) : "",
+      image: m.poster || "",
       grade: "",
-      note: result?.note || "",
+      note: m.overview ? m.overview.slice(0, 280) : "",
     };
     localStorage.setItem("aiSuggestedMovie", JSON.stringify(movie));
     navigate("/create");
@@ -87,7 +89,8 @@ const AiSuggestBox = () => {
           <Box>
             <Heading size="md">Not sure what to watch?</Heading>
             <Text color="text.muted" fontSize="sm">
-              Describe a mood, genre or vibe — the AI will pick one film for you.
+              Describe a mood, genre or vibe — you'll get real films (verified against a movie
+              database, so nothing is made up).
             </Text>
           </Box>
         </HStack>
@@ -97,16 +100,16 @@ const AiSuggestBox = () => {
             placeholder="e.g. a mind-bending sci-fi thriller for a rainy night"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && getSuggestion()}
+            onKeyDown={(e) => e.key === "Enter" && getSuggestions()}
             bg="bg.canvas"
             pr="9.5rem"
           />
           <InputRightElement width="9rem" pr={1}>
             <Button
               colorScheme="brand"
-              onClick={getSuggestion}
+              onClick={() => getSuggestions()}
               isLoading={loading}
-              loadingText="Thinking"
+              loadingText="Finding"
               size="sm"
               w="full"
             >
@@ -115,55 +118,70 @@ const AiSuggestBox = () => {
           </InputRightElement>
         </InputGroup>
 
-        {result && (
-          <Box
-            mt={2}
-            p={4}
-            borderRadius="xl"
-            bg="bg.muted"
-            border="1px solid"
-            borderColor="border.subtle"
-          >
-            {result.title ? (
-              <HStack spacing={4} align="start" flexDir={{ base: "column", sm: "row" }}>
-                <Image
-                  src={generatePoster(result.title, result.year)}
-                  alt={result.title}
-                  w={{ base: "full", sm: "140px" }}
-                  h={{ base: "160px", sm: "90px" }}
-                  objectFit="cover"
-                  borderRadius="lg"
-                />
-                <Box flex={1}>
-                  <Heading size="sm">
-                    {result.title}{" "}
-                    {result.year && (
-                      <Text as="span" color="text.muted" fontWeight="500">
-                        ({result.year})
-                      </Text>
-                    )}
-                  </Heading>
-                  <Text color="text.muted" fontSize="sm" mt={2}>
-                    {result.note}
-                  </Text>
-                </Box>
-              </HStack>
-            ) : (
-              <Text whiteSpace="pre-line">{raw}</Text>
-            )}
+        {movies && movies.length > 0 && (
+          <>
+            <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={3} mt={1}>
+              {movies.map((m, i) => (
+                <HStack
+                  key={`${m.title}-${i}`}
+                  spacing={3}
+                  align="start"
+                  p={3}
+                  borderRadius="xl"
+                  bg="bg.muted"
+                  border="1px solid"
+                  borderColor="border.subtle"
+                >
+                  <Image
+                    src={m.poster || generatePoster(m.title, m.year)}
+                    onError={(e) => { e.currentTarget.src = generatePoster(m.title, m.year); }}
+                    alt={m.title}
+                    w="70px"
+                    minW="70px"
+                    h="105px"
+                    objectFit="cover"
+                    borderRadius="md"
+                  />
+                  <Box flex={1} minW={0}>
+                    <Heading size="sm" noOfLines={2}>
+                      {m.title}{" "}
+                      {m.year && (
+                        <Text as="span" color="text.muted" fontWeight="500">
+                          ({m.year})
+                        </Text>
+                      )}
+                    </Heading>
+                    {m.rating ? (
+                      <HStack spacing={1} mt={1} color="brand.400">
+                        <FaStar size={11} />
+                        <Text fontSize="xs" color="text.muted">{m.rating.toFixed(1)}</Text>
+                      </HStack>
+                    ) : null}
+                    <Text color="text.muted" fontSize="xs" mt={1} noOfLines={3}>
+                      {m.overview || "No description available."}
+                    </Text>
+                    <Button colorScheme="brand" size="xs" mt={2} onClick={() => addToLibrary(m)}>
+                      Add to library
+                    </Button>
+                  </Box>
+                </HStack>
+              ))}
+            </SimpleGrid>
 
-            <HStack mt={4} spacing={2} flexWrap="wrap">
-              <Button colorScheme="brand" size="sm" onClick={handleAddClick} isDisabled={!result.title}>
-                Add to my library
+            <HStack spacing={2} flexWrap="wrap">
+              <Button variant="subtle" size="sm" onClick={() => getSuggestions({ more: true })} isLoading={loading}>
+                Suggest more
               </Button>
-              <Button variant="subtle" size="sm" onClick={getSuggestion} isLoading={loading}>
-                Suggest another
+              <Button variant="ghost" size="sm" onClick={() => { setMovies(null); setSeen([]); }}>
+                Clear
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setResult(null)}>
-                Dismiss
-              </Button>
+              {source && (
+                <Badge ml="auto" colorScheme="gray" variant="subtle" alignSelf="center">
+                  verified via {source === "tmdb" ? "TMDb" : "iTunes"}
+                </Badge>
+              )}
             </HStack>
-          </Box>
+          </>
         )}
       </VStack>
     </Box>

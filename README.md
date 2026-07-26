@@ -24,7 +24,10 @@ Users can:
 - Rate movies 1–10 with an interactive star picker
 - Leave personal notes
 - Search and sort their library (recently added, highest rated, newest release, title)
-- Get AI-powered recommendations and save them in one tap
+- Get AI-powered recommendations that are **grounded in a real movie database** —
+  the LLM proposes titles for your mood, then every suggestion is verified and
+  enriched (real title, year, poster, overview) so nothing is made up. Add any
+  result to your library in one tap.
 - Toggle light / dark mode
 - Enjoy a fast, responsive, cinematic dark-first UI
 
@@ -87,9 +90,16 @@ Create a `.env` file in the root:
 ```bash
 MONGO_URI=your-mongodb-connection-string
 PORT=5000
+
+# AI recommendations
+GROQ_API_KEY=your-groq-key         # required for the "recommend a movie" feature
+TMDB_API_KEY=your-tmdb-key         # optional — enables real posters + best data
 ```
 
- `.env` is already included in `.gitignore`.
+The AI feature proposes candidate titles with Groq, then **grounds** each one in
+a real source before showing it: TMDb when `TMDB_API_KEY` is set (real posters),
+otherwise a keyless Wikipedia lookup. Titles that can't be verified are dropped,
+so the assistant never invents a movie. `.env` is already in `.gitignore`.
 
 ---
 
