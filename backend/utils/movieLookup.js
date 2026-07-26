@@ -18,12 +18,55 @@
 
 const TMDB_KEY = process.env.TMDB_API_KEY;
 const TMDB_IMG = "https://image.tmdb.org/t/p/w342";
-const UA = "NitaisMovieWatchlist/1.0 (portfolio project)";
+const UA =
+  "NitaisMovieWatchlist/1.0 (https://github.com/NitaiEdelberg/NitaisWebsite; nitai.edel@gmail.com)";
 
-async function fetchJson(url, opts = {}) {
-  const res = await fetch(url, { headers: { "User-Agent": UA, ...opts.headers }, ...opts });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Fetch with a timeout + one retry. The keyless Wikipedia endpoint will
+// rate-limit a burst of concurrent anonymous requests (HTTP 429), which is the
+// main reason a lookup can transiently fail — a single backed-off retry clears
+// most of those.
+async function fetchJson(url, opts = {}, attempt = 0) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 7000);
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": UA, Accept: "application/json", ...opts.headers },
+      ...opts,
+    });
+    if (res.status === 429 && attempt < 1) {
+      clearTimeout(timer);
+      await sleep(500);
+      return fetchJson(url, opts, attempt + 1);
+    }
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return await res.json();
+  } catch (err) {
+    if (attempt < 1) {
+      await sleep(400);
+      return fetchJson(url, opts, attempt + 1);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Resolve async work with a small concurrency cap, preserving input order — so
+// we never hit the keyless API with a big burst of simultaneous requests.
+async function mapWithLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++;
+      out[idx] = await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
 }
 
 // Normalize a title for comparison: drop "(2010 film)" style parens, lowercase,
@@ -145,8 +188,10 @@ export async function verifyMovie(title, year) {
 // Verify a list of {title, year} candidates in parallel, drop the ones that
 // can't be confirmed, and de-duplicate by canonical title.
 export async function verifyCandidates(candidates = []) {
-  const verified = await Promise.all(
-    candidates.map((c) => verifyMovie(c.title, c.year))
+  // Cap concurrency so the keyless Wikipedia endpoint doesn't rate-limit a
+  // burst of simultaneous lookups (the cause of intermittent empty results).
+  const verified = await mapWithLimit(candidates, 3, (c) =>
+    verifyMovie(c.title, c.year)
   );
   const seen = new Set();
   const out = [];
