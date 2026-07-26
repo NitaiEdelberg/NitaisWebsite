@@ -60,6 +60,7 @@ const HomePage = () => {
   const { fetchMovies, movies, loading, hasFetched } = useMovieStore();
   const [searchTerm, setSearchTerm] = useState("");
   const [sort, setSort] = useState("recent");
+  const [minRating, setMinRating] = useState(0);
 
   useEffect(() => {
     fetchMovies();
@@ -74,8 +75,10 @@ const HomePage = () => {
   }, [movies]);
 
   const visibleMovies = useMemo(() => {
-    const filtered = movies.filter((m) =>
-      m.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const filtered = movies.filter(
+      (m) =>
+        m.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        (minRating === 0 || (Number(m.grade) || 0) >= minRating)
     );
     const sorters = {
       recent: (a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""),
@@ -84,7 +87,7 @@ const HomePage = () => {
       title: (a, b) => a.name.localeCompare(b.name),
     };
     return [...filtered].sort(sorters[sort] || sorters.recent);
-  }, [movies, searchTerm, sort]);
+  }, [movies, searchTerm, sort, minRating]);
 
   // Logged-out visitors get a proper landing page instead of an empty grid.
   if (!token) return <Landing />;
@@ -124,10 +127,24 @@ const HomePage = () => {
               />
             </InputGroup>
             <Select
+              value={minRating}
+              onChange={(e) => setMinRating(Number(e.target.value))}
+              maxW={{ base: "full", sm: "160px" }}
+              bg="bg.surface"
+              aria-label="Filter by minimum rating"
+            >
+              <option value={0}>Any rating</option>
+              <option value={6}>6+ ★</option>
+              <option value={7}>7+ ★</option>
+              <option value={8}>8+ ★</option>
+              <option value={9}>9+ ★</option>
+            </Select>
+            <Select
               value={sort}
               onChange={(e) => setSort(e.target.value)}
               maxW={{ base: "full", sm: "200px" }}
               bg="bg.surface"
+              aria-label="Sort movies"
             >
               <option value="recent">Recently added</option>
               <option value="rating">Highest rated</option>
@@ -168,10 +185,12 @@ const HomePage = () => {
         ) : visibleMovies.length === 0 ? (
           <Box textAlign="center" py={12}>
             <Text fontSize="lg" fontWeight="600">
-              No movies match &ldquo;{searchTerm}&rdquo;
+              {searchTerm
+                ? `No movies match “${searchTerm}”`
+                : `No movies rated ${minRating}+`}
             </Text>
             <Text color="text.muted" mt={1}>
-              Try another title, or{" "}
+              Try another title or filter, or{" "}
               <Text as={Link} to="/create" color="brand.400" fontWeight="600">
                 add it to your library
               </Text>

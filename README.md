@@ -28,7 +28,7 @@ Users can:
 - Add new movies (title, release year, poster image — a poster is auto-generated if none is given)
 - Rate movies 1–10 with an interactive star picker
 - Leave personal notes
-- Search and sort their library (recently added, highest rated, newest release, title)
+- Search, sort, and filter their library (by minimum rating; sort by recently added, highest rated, newest release, title)
 - Get AI-powered recommendations that are **grounded in a real movie database** —
   the LLM proposes titles for your mood, then every suggestion is verified and
   enriched (real title, year, poster, overview) so nothing is made up. Add any
@@ -196,7 +196,6 @@ VITE_PROXY_TARGET=https://nitaiswebsite.onrender.com npm run dev --prefix fronte
 ## Future Improvements
 
 - Public sharing of movie lists
-- Filter by rating (e.g., show only 8+ rated movies)
 - Upload real image files instead of URL
 
 ---
