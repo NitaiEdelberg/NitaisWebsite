@@ -1,5 +1,10 @@
 # Nitai's Movie Watchlist 🎬⭐
 
+![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white)
+![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)
+
 Welcome to Nitai's Movie Watchlist: a full-stack web application where you can save, update, and manage your favorite movies, add your personal rating (1-10), and even leave a personal note!
 
 ---
