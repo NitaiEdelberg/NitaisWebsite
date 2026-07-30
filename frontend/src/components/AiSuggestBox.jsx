@@ -177,7 +177,7 @@ const AiSuggestBox = () => {
               </Button>
               {source && (
                 <Badge ml="auto" colorScheme="gray" variant="subtle" alignSelf="center">
-                  verified via {source === "tmdb" ? "TMDb" : "iTunes"}
+                  verified via {source === "tmdb" ? "TMDb" : "Wikipedia"}
                 </Badge>
               )}
             </HStack>
