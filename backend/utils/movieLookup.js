@@ -71,7 +71,7 @@ async function mapWithLimit(items, limit, fn) {
 
 // Normalize a title for comparison: drop "(2010 film)" style parens, lowercase,
 // strip punctuation, collapse whitespace.
-function normTitle(t = "") {
+export function normTitle(t = "") {
   return String(t)
     .replace(/\((?:[^)]*\bfilm\b[^)]*|\d{4})\)/gi, "")
     .toLowerCase()
@@ -83,7 +83,7 @@ function normTitle(t = "") {
 // Guard against the search engine returning an unrelated film for an invented
 // title: require meaningful token overlap between what we asked for and what
 // came back (or one being a substring of the other).
-function titlesMatch(query, found) {
+export function titlesMatch(query, found) {
   const a = normTitle(query);
   const b = normTitle(found);
   if (!a || !b) return false;
