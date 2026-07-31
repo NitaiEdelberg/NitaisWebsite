@@ -1,0 +1,35 @@
+name: Keep backend awake
+
+# Render's free tier sleeps a service after ~15 min of inactivity; the next
+# visitor then waits ~50s for a cold start. This cron pings the backend often
+# enough that it never sleeps — so the first real API call is instant.
+#
+# IMPORTANT — free instance-hour budget:
+#   Render's free tier includes a limited number of instance-hours per month
+#   (~750, account-wide across all your free services). Keeping a service awake
+#   24/7 uses ~730h by itself, so pinging every backend around the clock would
+#   blow the budget and get one suspended. This workflow therefore only pings
+#   during a daytime window (06:00–18:59 UTC ≈ 09:00–21:59 Israel, also covering
+#   US morning) — ~13h/day, which leaves room for your other free services.
+#
+#   • To keep it awake 24/7 (e.g. if you upgrade or have spare hours):
+#         cron: '*/10 * * * *'
+#   • To widen/narrow the window, change the hour range "6-18".
+
+on:
+  schedule:
+    - cron: '*/10 6-18 * * *'   # every 10 min, 06:00–18:59 UTC
+  workflow_dispatch:            # allow a manual "wake it now" run
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the Render backend
+        run: |
+          code=$(curl -sS -m 60 -o /dev/null -w "%{http_code}" https://nitaiswebsite.onrender.com/ || echo "000")
+          echo "Backend responded with HTTP $code"
+          # Any response (even 401) means the container is awake — that's the goal.
+          if [ "$code" = "000" ]; then
+            echo "No response within 60s (cold start in progress or down)."
+          fi
