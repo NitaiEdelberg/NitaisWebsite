@@ -1,35 +1,51 @@
 name: Keep backend awake
 
 # Render's free tier sleeps a service after ~15 min of inactivity; the next
-# visitor then waits ~50s for a cold start. This cron pings the backend often
-# enough that it never sleeps — so the first real API call is instant.
+# visitor then waits ~50s for a cold start. This cron pings the backend so the
+# first real request of the day is instant. Note that this service also *serves
+# the frontend*, so a cold start here is a blank browser tab, not just a slow
+# API — which is why it keeps a window at all rather than relying on a
+# wake-on-load ping the way the Netlify-hosted projects do.
 #
-# IMPORTANT — free instance-hour budget:
-#   Render's free tier includes a limited number of instance-hours per month
-#   (~750, account-wide across all your free services). Keeping a service awake
-#   24/7 uses ~730h by itself, so pinging every backend around the clock would
-#   blow the budget and get one suspended. This workflow therefore only pings
-#   during a daytime window (06:00–18:59 UTC ≈ 09:00–21:59 Israel, also covering
-#   US morning) — ~13h/day, which leaves room for your other free services.
+# ── THE BUDGET IS ACCOUNT-WIDE, NOT PER SERVICE ──────────────────────────────
+# Render gives 750 free instance-hours a month across EVERY free service in the
+# workspace, and when they run out it suspends ALL of them until the 1st. Three
+# repos each carried a keep-alive whose comment reasoned about that 750h as if it
+# were the only service. Added up:
 #
-#   • To keep it awake 24/7 (e.g. if you upgrade or have spare hours):
-#         cron: '*/10 * * * *'
-#   • To widen/narrow the window, change the hour range "6-18".
+#     amtza-api           18h/day    540h
+#     nitaiswebsite       13h/day    390h
+#     jailbreak-backend   13h/day    390h
+#                                   ------
+#                                   1320h  against a 750h budget (1.8x over)
+#
+# Nothing broke only because GitHub was silently dropping most of the runs (the
+# observed interval was ~2h, not 10 min). Making the cron reliable without also
+# fixing this would have suspended the whole portfolio around day 17 of a month.
+#
+# Current allocation, ~540h total, leaving ~210h for organic traffic:
+#     amtza-api           10h/day    300h   (worst cold start: minutes, not ~50s)
+#     nitaiswebsite        4h/day    120h   <- this file
+#     jailbreak-backend    4h/day    120h
+#
+# GitHub's cron is best-effort and drops runs under load, worst at the top of the
+# hour — hence the offset minute rather than a plain */10.
 
 on:
   schedule:
-    - cron: '*/10 6-18 * * *'   # every 10 min, 06:00–18:59 UTC
-  workflow_dispatch:            # allow a manual "wake it now" run
+    - cron: '6-59/10 7-10 * * *'   # every 10 min, 07:00-10:59 UTC = 10:00-14:00 Israel
+  workflow_dispatch:               # allow a manual "wake it now" run
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Ping the Render backend
         run: |
-          code=$(curl -sS -m 60 -o /dev/null -w "%{http_code}" https://nitaiswebsite.onrender.com/ || echo "000")
+          code=$(curl -sS -m 180 -o /dev/null -w "%{http_code}" https://nitaiswebsite.onrender.com/ || echo "000")
           echo "Backend responded with HTTP $code"
           # Any response (even 401) means the container is awake — that's the goal.
           if [ "$code" = "000" ]; then
-            echo "No response within 60s (cold start in progress or down)."
+            echo "No response within 180s (cold start in progress or down)."
           fi
