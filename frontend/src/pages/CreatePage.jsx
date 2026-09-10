@@ -33,7 +33,7 @@ const CreatePage = () => {
     if (saved) {
       setNewMovie({ ...EMPTY, ...JSON.parse(saved) });
       localStorage.removeItem("aiSuggestedMovie");
-      toast({ title: "AI pick loaded — review and save it.", status: "info", duration: 3000 });
+      toast({ title: "AI pick loaded. Review and save it.", status: "info", duration: 3000 });
     }
   }, [toast]);
 

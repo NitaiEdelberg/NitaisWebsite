@@ -43,7 +43,7 @@ const RegisterPage = () => {
       });
       const data = await res.json();
       if (data.success) {
-        toast({ title: "Account created — please log in.", status: "success", isClosable: true, duration: 3000 });
+        toast({ title: "Account created. Please log in.", status: "success", isClosable: true, duration: 3000 });
         navigate("/login");
       } else {
         toast({ title: "Registration failed", description: data.message, status: "error", isClosable: true });

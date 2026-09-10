@@ -22,7 +22,7 @@ const features = [
   {
     icon: FaRegStickyNote,
     title: "Personal notes",
-    desc: "Jot down why a film stuck with you — a private journal for your watchlist.",
+    desc: "Jot down why a film stuck with you. A private journal for your watchlist.",
   },
   {
     icon: FaMagic,
@@ -66,7 +66,7 @@ const Landing = () => {
         </Text>
         <HStack spacing={4} pt={2} flexDir={{ base: "column", sm: "row" }}>
           <Button as={Link} to="/register" colorScheme="brand" size="lg" px={8}>
-            Get started — it&apos;s free
+            Get started, it&apos;s free
           </Button>
           <Button as={Link} to="/login" variant="subtle" size="lg" px={8}>
             Log in

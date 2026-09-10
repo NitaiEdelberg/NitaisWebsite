@@ -175,7 +175,7 @@ const HomePage = () => {
               Your library is empty
             </Heading>
             <Text color="text.muted" maxW="420px" mx="auto" mb={6}>
-              Add your first film — or describe a mood below and let the AI pick
+              Add your first film, or describe a mood below and let the AI pick
               one for you.
             </Text>
             <Button as={Link} to="/create" colorScheme="brand" size="lg">
