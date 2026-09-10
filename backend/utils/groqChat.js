@@ -1,5 +1,11 @@
 // Groq chat call with a model fallback.
 //
+// The fallback list is verified against the live API, not guessed:
+// llama-3.1-8b-instant returns 404 on this account, which would have made it a
+// dead entry in a chain whose entire job is to have none. gpt-oss-20b answers,
+// and Groq meters tokens per model per day, so when the big model's daily
+// budget is spent the small one keeps recommendations working.
+//
 // Groq retires free-tier models (llama-3.3-70b-versatile went on 2026-06-17)
 // and the retirement only surfaces as a 404 model_not_found on the next call,
 // so one stale id silently kills every AI feature. Try the configured model
@@ -9,7 +15,7 @@
 export const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 export const modelCandidates = (configured = process.env.GROQ_MODEL) =>
-  [configured, "openai/gpt-oss-120b", "llama-3.1-8b-instant"].filter(
+  [configured, "openai/gpt-oss-120b", "openai/gpt-oss-20b"].filter(
     (m, i, all) => m && all.indexOf(m) === i
   );
 

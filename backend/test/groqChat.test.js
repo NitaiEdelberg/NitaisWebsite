@@ -88,7 +88,7 @@ test("modelIsGone only fires on a missing model", () => {
 test("candidates are de-duplicated and keep the configured model first", () => {
   assert.deepEqual(modelCandidates("openai/gpt-oss-120b"), [
     "openai/gpt-oss-120b",
-    "llama-3.1-8b-instant",
+    "openai/gpt-oss-20b",
   ]);
   assert.equal(modelCandidates(undefined)[0], "openai/gpt-oss-120b");
 });
