@@ -35,11 +35,20 @@ const AiSuggestBox = () => {
     }
     setLoading(true);
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch("/api/ai/recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ prompt: input, exclude: more ? seen : [] }),
       });
+      if (res.status === 401) {
+        toast({ title: "Please log in again to use AI picks.", status: "warning", duration: 3000 });
+        setMovies([]);
+        return;
+      }
       const data = await res.json();
       if (data.success && Array.isArray(data.movies) && data.movies.length) {
         setMovies(data.movies);
@@ -89,7 +98,7 @@ const AiSuggestBox = () => {
           <Box>
             <Heading size="md">Not sure what to watch?</Heading>
             <Text color="text.muted" fontSize="sm">
-              Describe a mood, genre or vibe — you'll get real films (verified against a movie
+              Describe a mood, genre or vibe and you'll get real films (verified against a movie
               database, so nothing is made up).
             </Text>
           </Box>

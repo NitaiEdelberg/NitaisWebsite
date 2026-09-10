@@ -1,11 +1,11 @@
 import dotenv from "dotenv";
 import { verifyCandidates, groundingProvider } from "../utils/movieLookup.js";
+import { groqChat } from "../utils/groqChat.js";
 dotenv.config();
 
 // Movie recommendations via Groq (OpenAI-compatible, free tier, no credit card).
 // Set GROQ_API_KEY in the environment. Get a key at https://console.groq.com/keys
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+// Model selection and the retired-model fallback live in utils/groqChat.js.
 
 // Ask the LLM for candidate titles only — NOT for facts we'll display.
 // Everything the user sees (title, year, poster, overview) is replaced by real
@@ -17,42 +17,28 @@ async function proposeCandidates(prompt, exclude = []) {
     ? `\nDo NOT suggest any of these already-shown films: ${exclude.join(", ")}.`
     : "";
 
-  const response = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      temperature: 0.8,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a film expert. You only ever name real, released movies " +
-            "that exist on TMDb/IMDb. Never invent titles. Respond with JSON only.",
-        },
-        {
-          role: "user",
-          content:
-            `Suggest 6 real, existing movies that fit this request: "${prompt}".` +
-            excludeNote +
-            `\nReturn strict JSON of the form: {"movies":[{"title":"exact title","year":1999}, ...]}. ` +
-            `Use the exact released title and correct release year for each.`,
-        },
-      ],
-    }),
-  });
+  const body = {
+    temperature: 0.8,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a film expert. You only ever name real, released movies " +
+          "that exist on TMDb/IMDb. Never invent titles. Respond with JSON only.",
+      },
+      {
+        role: "user",
+        content:
+          `Suggest 6 real, existing movies that fit this request: "${prompt}".` +
+          excludeNote +
+          `\nReturn strict JSON of the form: {"movies":[{"title":"exact title","year":1999}, ...]}. ` +
+          `Use the exact released title and correct release year for each.`,
+      },
+    ],
+  };
 
-  const data = await response.json();
-  if (!response.ok || !data.choices?.length) {
-    const err = new Error("AI API error");
-    err.details = data;
-    err.status = response.status || 500;
-    throw err;
-  }
+  const data = await groqChat(body);
 
   let parsed;
   try {
@@ -101,9 +87,14 @@ export const getMovieRecommendation = async (req, res) => {
       source: groundingProvider(),
     });
   } catch (err) {
-    console.error("AI recommend error:", err.message, err.details || "");
-    return res
-      .status(err.status || 500)
-      .json({ success: false, message: err.message || "Server error" });
+    // The upstream detail (dead model id, rate limit, bad key) belongs in the
+    // logs; the visitor gets something they can act on instead of "AI API error".
+    console.error("AI recommend error:", err.message, JSON.stringify(err.details || ""));
+    const upstream = err.status || 500;
+    const message =
+      upstream === 429
+        ? "The AI service is busy right now. Try again in a minute."
+        : "The AI recommender is unavailable right now. The rest of the library still works.";
+    return res.status(upstream === 429 ? 429 : 502).json({ success: false, message });
   }
 };
