@@ -81,3 +81,31 @@ describe("movie store", () => {
     expect(useMovieStore.getState().movies).toEqual([]);
   });
 });
+
+describe("when the library cannot be loaded", () => {
+  it("says so instead of looking like an empty library", async () => {
+    localStorage.setItem("token", "t");
+    global.fetch = vi.fn().mockRejectedValue(new Error("offline"));
+    await useMovieStore.getState().fetchMovies();
+    const state = useMovieStore.getState();
+    expect(state.error).toMatch(/connection problem/i);
+    expect(state.hasFetched).toBe(true);
+  });
+
+  it("explains an expired session rather than emptying the shelf silently", async () => {
+    localStorage.setItem("token", "t");
+    global.fetch = vi.fn().mockResolvedValue({ status: 401, json: async () => ({}) });
+    await useMovieStore.getState().fetchMovies();
+    expect(useMovieStore.getState().error).toMatch(/session expired/i);
+  });
+
+  it("clears the error once a load succeeds", async () => {
+    localStorage.setItem("token", "t");
+    global.fetch = vi.fn().mockResolvedValue({
+      status: 200, json: async () => ({ success: true, data: [{ _id: "1", name: "Heat", year: 1995 }] }),
+    });
+    await useMovieStore.getState().fetchMovies();
+    expect(useMovieStore.getState().error).toBe(null);
+    expect(useMovieStore.getState().movies).toHaveLength(1);
+  });
+});

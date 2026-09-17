@@ -22,7 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMovieStore } from "../store/movie";
 import MovieCard from "../components/MovieCard";
-import AiSuggestBox from "../components/AiSuggestBox";
+import RecommendChat from "../components/RecommendChat";
 import FirstVisit from "../components/FirstVisit";
 import Landing from "../components/Landing";
 
@@ -58,7 +58,7 @@ const CardSkeleton = () => (
 
 const HomePage = () => {
   const token = localStorage.getItem("token");
-  const { fetchMovies, movies, loading, hasFetched } = useMovieStore();
+  const { fetchMovies, movies, loading, hasFetched, error } = useMovieStore();
   const [searchTerm, setSearchTerm] = useState("");
   const [sort, setSort] = useState("recent");
   const [minRating, setMinRating] = useState(0);
@@ -158,8 +158,26 @@ const HomePage = () => {
           </HStack>
         )}
 
-        {/* Grid states */}
-        {isInitialLoading ? (
+        {/* Grid states. Error first: a failed load is not an empty library, and
+            saying so is the difference between "add your first film" and
+            "your films are fine, the connection isn't". */}
+        {error ? (
+          <Box
+            textAlign="center"
+            py={14}
+            px={6}
+            border="1px solid"
+            borderColor="red.400"
+            borderRadius="2xl"
+            bg="bg.surface"
+          >
+            <Heading size="md" mb={2}>Couldn&apos;t load your library</Heading>
+            <Text color="text.muted" maxW="420px" mx="auto" mb={6}>{error}</Text>
+            <Button colorScheme="brand" onClick={() => fetchMovies()} isLoading={loading}>
+              Try again
+            </Button>
+          </Box>
+        ) : isInitialLoading ? (
           <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={8} w="full">
             {Array.from({ length: 6 }).map((_, i) => (
               <CardSkeleton key={i} />
@@ -210,7 +228,7 @@ const HomePage = () => {
         )}
 
         <Divider borderColor="border.subtle" pt={4} />
-        <AiSuggestBox />
+        <RecommendChat />
       </VStack>
     </Container>
   );

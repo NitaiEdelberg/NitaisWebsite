@@ -10,6 +10,9 @@ export const useMovieStore = create((set) => ({
   movies: [],
   loading: false,
   hasFetched: false,
+  // Set when the library could not be loaded, so "empty" and "broken" are not
+  // shown as the same thing.
+  error: null,
   setMovies: (movies) => set({ movies }),
 
   createMovie: async (newMovie) => {
@@ -54,13 +57,24 @@ export const useMovieStore = create((set) => ({
       return;
     }
 
-    set({ loading: true });
+    set({ loading: true, error: null });
     try {
       const res = await fetch("/api/movies", { headers });
+      if (res.status === 401) {
+        set({ movies: [], error: "Your session expired. Log in again to see your library." });
+        return;
+      }
       const data = await res.json();
-      if (data.success) set({ movies: data.data });
+      if (data.success) {
+        set({ movies: data.data, error: null });
+      } else {
+        set({ error: data.message || "Couldn't load your library." });
+      }
     } catch {
-      // network error — keep whatever we had, surface via UI empty/error state
+      // A failed fetch used to leave the page looking like an empty library,
+      // which tells someone with forty saved films that they have none. The
+      // error is recorded so the page can say what actually happened.
+      set({ error: "Couldn't reach the server. Your films are safe — this is a connection problem." });
     } finally {
       set({ loading: false, hasFetched: true });
     }

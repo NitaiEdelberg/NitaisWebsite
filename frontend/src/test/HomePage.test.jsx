@@ -15,7 +15,7 @@ describe("HomePage", () => {
     global.fetch = vi.fn();
     renderWithProviders(<HomePage />);
     expect(
-      await screen.findByRole("link", { name: /get started/i })
+      await screen.findByRole("link", { name: /start your library/i })
     ).toBeInTheDocument();
     // logged-out visitors never trigger an authenticated movie fetch
     expect(global.fetch).not.toHaveBeenCalled();

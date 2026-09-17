@@ -24,3 +24,10 @@ if (!window.matchMedia) {
 
 // jsdom lacks scrollTo; some Chakra components call it.
 window.scrollTo = window.scrollTo || (() => {});
+
+// jsdom implements no layout, so scrollIntoView does not exist on elements.
+// Stubbed here rather than guarded in the components: the guard would be dead
+// code in every real browser, written to satisfy a test environment.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
