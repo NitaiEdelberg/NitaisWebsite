@@ -1,181 +1,203 @@
-import dotenv from "dotenv";
-import { verifyCandidates, groundingProvider } from "../utils/movieLookup.js";
-import { groqChat } from "../utils/groqChat.js";
+// HTTP for the recommendation feature. The thinking lives in
+// services/recommendation — this translates between it and Express.
+//
+// A controller's job here is: read the request, load what the pipeline needs
+// from the database, call it, decide the status code, and log what happened. No
+// prompts, no model calls, no ranking. When this file starts growing again,
+// something belongs in a service.
 import Movie from "../models/movie.model.js";
-dotenv.config();
+import { logEvent } from "../utils/requestLog.js";
+import { MAX_MESSAGE_CHARS } from "../utils/untrusted.js";
+import {
+  recommend, rememberTurn, recordRejection,
+} from "../services/recommendation/index.js";
+import { loadSession } from "../services/recommendation/conversation.js";
 
-// Movie recommendations via Groq (OpenAI-compatible, free tier, no credit card).
-// Set GROQ_API_KEY in the environment. Get a key at https://console.groq.com/keys
-// Model selection and the retired-model fallback live in utils/groqChat.js.
-
-// Ask the LLM for candidate titles only — NOT for facts we'll display.
-// Everything the user sees (title, year, poster, overview) is replaced by real
-// data from the movie database in the grounding step, so the model inventing a
-// film or a wrong year can't leak through: an invented title simply fails
-// verification and gets dropped.
-async function proposeCandidates(prompt, exclude = [], taste = []) {
-  const excludeNote = exclude.length
-    ? `\n\nALREADY SEEN — do not suggest any of these: ${exclude.join(", ")}.`
-    : "";
-
-  // What the person already saved and rated highly, as a taste signal rather
-  // than as a request. Without it every session starts from zero and the same
-  // crowd-pleasers come back.
-  const tasteNote = taste.length
-    ? `\n\nFor calibration only, films this person rated highly: ${taste.join(", ")}. ` +
-      "Match the sensibility, do not match the plot, and never suggest these back."
-    : "";
-
-  const body = {
-    // Lower than the 0.8 this used to run at. Temperature was doing the job
-    // variety should do: it bought different answers by making the model
-    // sloppier about titles and years, and every sloppy title dies in the
-    // grounding step anyway. The spread rules below buy variety honestly.
-    temperature: 0.5,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a film expert with wide, unsnobbish taste. You only ever name " +
-          "real, released films that exist on TMDb or IMDb, with their exact " +
-          "released title and correct year. You never invent a title, and you " +
-          "never pad a list with famous films that do not fit the request. " +
-          "Respond with JSON only.",
-      },
-      {
-        role: "user",
-        content:
-          `Suggest 8 real films for this request: "${prompt}".` +
-          tasteNote +
-          excludeNote +
-          `
-
-MAKE THE EIGHT DIFFERENT FROM EACH OTHER:
-- Span at least three decades, unless the request asks for one era.
-- At most three films from the same director, franchise or series.
-- Include at least two that a casual viewer would not have heard of. A list of the eight most obvious films is a worse answer even when every one of them fits.
-- Do not include a film only because it is acclaimed. It has to fit the request.
-
-IF THE REQUEST IS VAGUE, commit to one reading of it rather than hedging across several — a coherent eight beats a scattered eight.
-
-Return strict JSON: {"movies":[{"title":"exact released title","year":1999,"why":"at most 12 words on why it fits the request"}]}`,
-      },
-    ],
-  };
-
-  const data = await groqChat(body);
-
-  let parsed;
-  try {
-    parsed = JSON.parse(data.choices[0].message.content);
-  } catch {
-    return { candidates: [], trace: data.trace };
-  }
-  const list = Array.isArray(parsed) ? parsed : parsed.movies || parsed.results || [];
-  const candidates = list
-    .filter((m) => m && m.title)
-    .map((m) => ({ title: String(m.title).trim(), year: m.year, why: m.why }));
-  return { candidates, trace: data.trace };
-}
-
-
-// Titles already in this person's library. Suggesting a film they have already
-// saved is the most obviously useless thing this feature can do, and it was
-// doing it — the exclusion list only ever held what the browser had shown in
-// the current session.
-async function savedTitles(userId) {
-  if (!userId) return { seen: [], liked: [] };
+/**
+ * What the pipeline needs to know about somebody's library.
+ *
+ * Read here rather than inside the service so the pipeline stays free of
+ * database access and can be tested without one. A failure degrades to an empty
+ * library: taste is a nice-to-have, a suggestion is the product.
+ */
+async function readLibrary(userId) {
+  if (!userId) return { owned: [], liked: [] };
   try {
     const saved = await Movie.find({ user: userId }, "name grade").lean();
     return {
-      seen: saved.map((m) => m.name).filter(Boolean),
+      owned: saved.map((m) => m.name).filter(Boolean),
       liked: saved
         .filter((m) => typeof m.grade === "number" && m.grade >= 8)
         .sort((a, b) => b.grade - a.grade)
         .slice(0, 8)
         .map((m) => m.name),
     };
-  } catch (err) {
-    // Taste is a nice-to-have; a database hiccup must not cost the suggestion.
-    console.warn("could not read the library for taste:", err.message);
-    return { seen: [], liked: [] };
+  } catch (error) {
+    console.warn("could not read the library:", error.message);
+    return { owned: [], liked: [] };
   }
 }
 
 export const getMovieRecommendation = async (req, res) => {
-  const { prompt, exclude } = req.body;
+  // `prompt` is what the old single-shot form sent; `message` is what the chat
+  // sends. Both accepted so an older client keeps working.
+  const message = req.body?.message ?? req.body?.prompt;
+  const extraAvoid = Array.isArray(req.body?.exclude) ? req.body.exclude.slice(0, 40) : [];
 
-  if (!prompt || !String(prompt).trim()) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Describe what you're in the mood for." });
+  if (!message || !String(message).trim()) {
+    return res.status(400).json({
+      success: false,
+      message: "Tell me what you're in the mood for.",
+    });
+  }
+  if (String(message).length > MAX_MESSAGE_CHARS * 4) {
+    return res.status(413).json({
+      success: false,
+      message: `That's a long one — keep it under ${MAX_MESSAGE_CHARS} characters.`,
+    });
   }
 
-  const started = Date.now();
-
   try {
-    const { seen, liked } = await savedTitles(req.userId);
-    const fromClient = Array.isArray(exclude) ? exclude.slice(0, 40) : [];
-    // Everything the person has already been shown or already owns, de-duped.
-    const avoid = [...new Set([...fromClient, ...seen])].slice(0, 60);
+    const [session, library] = await Promise.all([
+      loadSession(req.userId),
+      readLibrary(req.userId),
+    ]);
 
-    const { candidates, trace } = await proposeCandidates(
-      String(prompt).trim(), avoid, liked
-    );
+    const result = await recommend({ message, session, library, extraAvoid });
 
-    // Ground every candidate against a real movie database; keep only the ones
-    // that actually exist, with canonical data + real posters.
-    const verified = await verifyCandidates(candidates);
-
-    // The model was told not to repeat these, which is not the same as it
-    // obeying. Enforced here, because "already in your library" is the one
-    // suggestion that is certainly useless.
-    const blocked = new Set(avoid.map((t) => t.toLowerCase().trim()));
-    const movies = verified.filter((m) => !blocked.has((m.title || "").toLowerCase().trim()));
-
-    const report = {
-      proposed: candidates.length,
-      verified: verified.length,
-      // Dropped by the grounding step: titles the model named that no real
-      // film matches. The number this feature exists to keep at zero.
-      unverifiable: candidates.length - verified.length,
-      repeats_blocked: verified.length - movies.length,
-      excluded: avoid.length,
-      taste_signals: liked.length,
-      ms: Date.now() - started,
-      models: trace?.models || [],
-      tokens: (trace?.calls || []).reduce((sum, c) => sum + (c.tokens || 0), 0),
-    };
-    console.log("ai.recommend", JSON.stringify(report));
-
-    if (!movies.length) {
-      return res.status(200).json({
-        success: true,
-        movies: [],
-        source: groundingProvider(),
-        trace: report,
-        message: avoid.length
-          ? "Nothing new for that one — everything it suggested is already in your library or has been shown. Try a different angle."
-          : "Couldn't find verified matches for that. Try describing the vibe a little differently.",
-      });
+    // Remembering must not cost the answer: if the session cannot be written,
+    // the person still gets their films and the next turn starts a little
+    // colder.
+    let memory = null;
+    try {
+      memory = await rememberTurn({ session, message, result });
+    } catch (error) {
+      logEvent("ai.memory_failed", { request_id: req.id, error: error.message });
     }
+
+    logEvent("ai.recommend", {
+      request_id: req.id,
+      prompt_version: result.prompt_version,
+      injection_flagged: result.injection.length,
+      ...flatten(result.trace),
+      learned: memory?.learned ?? 0,
+    });
 
     return res.status(200).json({
       success: true,
-      movies: movies.slice(0, 5),
-      source: groundingProvider(),
-      trace: report,
+      reply: result.reply,
+      movies: result.movies,
+      source: result.trace.verification.source,
+      suspicious: result.injection.length > 0,
+      trace: publicTrace(result),
     });
-  } catch (err) {
-    // The upstream detail (dead model id, rate limit, bad key) belongs in the
-    // logs; the visitor gets something they can act on instead of "AI API error".
-    console.error("AI recommend error:", err.message, JSON.stringify(err.details || ""));
-    const upstream = err.status || 500;
-    const message =
-      upstream === 429
-        ? "The AI service is busy right now. Try again in a minute."
-        : "The AI recommender is unavailable right now. The rest of the library still works.";
-    return res.status(upstream === 429 ? 429 : 502).json({ success: false, message });
+  } catch (error) {
+    logEvent("ai.failed", {
+      request_id: req.id,
+      status: error.status || 500,
+      error: error.message,
+      details: error.details,
+    });
+
+    const status = error.status || 502;
+    return res.status(status === 429 ? 429 : status).json({
+      success: false,
+      message:
+        error.userMessage ||
+        (status === 429
+          ? "The recommender is busy right now. Try again in a minute."
+          : "The recommender is unavailable right now. The rest of your library still works."),
+    });
   }
 };
+
+/** POST /api/ai/reject — "not for me", the cheapest signal a person can give. */
+export const rejectRecommendation = async (req, res) => {
+  const { title, movie } = req.body || {};
+  if (!title) {
+    return res.status(400).json({ success: false, message: "Which film?" });
+  }
+  try {
+    const session = await loadSession(req.userId);
+    await recordRejection({ session, title: String(title).slice(0, 120), movie });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    logEvent("ai.reject_failed", { request_id: req.id, error: error.message });
+    // Losing one rejection is not worth an error in the user's face.
+    return res.status(200).json({ success: true, stored: false });
+  }
+};
+
+/**
+ * GET /api/ai/memory — what the system believes about you, and why.
+ *
+ * Exists because memory that cannot be inspected cannot be trusted or
+ * corrected. It is also the honest answer to "what are you storing about me".
+ */
+export const getMemory = async (req, res) => {
+  try {
+    const session = await loadSession(req.userId);
+    return res.status(200).json({
+      success: true,
+      preferences: (session?.preferences || []).map((p) => ({
+        kind: p.kind, value: p.value, sentiment: p.sentiment,
+        source: p.source, weight: p.weight,
+      })),
+      summary: session?.summary || "",
+      turns: session?.messages?.length || 0,
+      shown: session?.shown?.length || 0,
+      rejected: session?.rejected?.length || 0,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Could not read your preferences." });
+  }
+};
+
+/** DELETE /api/ai/memory — forget everything learned. */
+export const forgetMemory = async (req, res) => {
+  try {
+    const session = await loadSession(req.userId);
+    if (session) {
+      session.messages = [];
+      session.summary = "";
+      session.preferences = [];
+      session.shown = [];
+      session.rejected = [];
+      await session.save();
+    }
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Could not clear your preferences." });
+  }
+};
+
+// The trace a user is allowed to see: counts, not prompts.
+function publicTrace(result) {
+  return {
+    proposed: result.trace.validation.proposed,
+    verified: result.trace.verification.verified,
+    unverifiable: result.trace.verification.unverifiable,
+    blocked_as_seen: result.trace.filtering.blocked_as_seen,
+    shown: result.trace.ranking.shown,
+    avoiding: result.trace.context.avoid,
+    preferences_used: result.trace.context.preferences,
+    ms: result.trace.total_ms,
+  };
+}
+
+const flatten = (trace) => ({
+  ctx_turns: trace.context.turns,
+  ctx_prefs: trace.context.preferences,
+  ctx_avoid: trace.context.avoid,
+  ctx_tokens: trace.context.estimated_tokens,
+  model_ms: trace.model.ms,
+  model: (trace.model.models || []).join(","),
+  tokens: trace.model.tokens,
+  proposed: trace.validation.proposed,
+  verified: trace.verification.verified,
+  unverifiable: trace.verification.unverifiable,
+  cache_hit_rate: trace.verification.cache.hit_rate,
+  blocked: trace.filtering.blocked_as_seen,
+  shown: trace.ranking.shown,
+  total_ms: trace.total_ms,
+});

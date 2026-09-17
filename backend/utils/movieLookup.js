@@ -1,3 +1,4 @@
+import { movieFactCache, movieKey } from "./cache.js";
 // Grounding layer for AI recommendations.
 //
 // The LLM is good at understanding a *mood* ("a cozy heist movie for a rainy
@@ -173,16 +174,32 @@ async function verifyWithWikipedia(title, year) {
 // Verify a single candidate title against whichever provider is available.
 export async function verifyMovie(title, year) {
   if (!title) return null;
+
+  // Whether "Heat" (1995) is a real film is the same answer for everybody and
+  // does not change. Cached — including the negative answer, because an
+  // invented title is exactly what a popular prompt produces repeatedly, and
+  // re-asking Wikipedia about a film that does not exist is the most wasteful
+  // lookup this makes. See utils/cache.js for what is deliberately NOT cached.
+  const key = movieKey(title, year);
+  const cached = movieFactCache.get(key);
+  if (cached !== undefined) return cached;
+
+  let result = null;
   try {
     if (TMDB_KEY) {
       const viaTmdb = await verifyWithTmdb(title, year);
-      if (viaTmdb) return viaTmdb;
+      if (viaTmdb) result = viaTmdb;
     }
-    return await verifyWithWikipedia(title, year);
+    if (!result) result = await verifyWithWikipedia(title, year);
   } catch (err) {
     console.error(`movie lookup failed for "${title}":`, err.message);
+    // A network failure is not evidence the film does not exist, so it is not
+    // cached: the next request should ask again rather than inherit an outage.
     return null;
   }
+
+  movieFactCache.set(key, result);
+  return result;
 }
 
 // Verify a list of {title, year} candidates in parallel, drop the ones that

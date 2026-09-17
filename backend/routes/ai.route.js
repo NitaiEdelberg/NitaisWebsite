@@ -1,12 +1,20 @@
 import express from 'express';
-import { getMovieRecommendation } from '../controllers/ai.controller.js';
+import {
+  getMovieRecommendation, rejectRecommendation, getMemory, forgetMemory,
+} from '../controllers/ai.controller.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { aiRateLimit } from '../middleware/rateLimit.js';
 
 const router = express.Router();
 
-// Logged in only: the box that calls this is on the home page, which is behind
-// login anyway, and without the guard this route is an open proxy to my Groq
-// key that anyone can bill.
-router.post('/recommend', authMiddleware, getMovieRecommendation);
+// Every route here is signed-in only. Without the guard this is an open proxy
+// to a paid model API, and the memory it reads and writes belongs to one
+// person.
+router.use(authMiddleware);
+
+router.post('/recommend', aiRateLimit, getMovieRecommendation);
+router.post('/reject', rejectRecommendation);
+router.get('/memory', getMemory);
+router.delete('/memory', forgetMemory);
 
 export default router;
