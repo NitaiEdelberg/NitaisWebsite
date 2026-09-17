@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Box, Button, HStack, Heading, Text, VStack, CloseButton,
 } from "@chakra-ui/react";
+import { markTourSeen, shouldShowTour } from "../utils/tourState";
 
 // What to do here, said once.
 //
@@ -13,18 +14,6 @@ import {
 // Three steps, because there are three things to do. Dismissed forever on this
 // browser, and never shown to somebody who already has films saved — they have
 // evidently worked it out.
-
-const SEEN_KEY = "movie-tour-dismissed";
-
-export function shouldShowTour(hasMovies) {
-  if (hasMovies) return false;
-  try {
-    return localStorage.getItem(SEEN_KEY) !== "1";
-  } catch {
-    // Private window: showing it every time is better than crashing.
-    return true;
-  }
-}
 
 const STEPS = [
   {
@@ -46,11 +35,7 @@ export default function FirstVisit({ hasMovies, onDismiss }) {
 
   function dismiss() {
     setOpen(false);
-    try {
-      localStorage.setItem(SEEN_KEY, "1");
-    } catch {
-      /* nothing to remember it with */
-    }
+    markTourSeen();
     if (onDismiss) onDismiss();
   }
 

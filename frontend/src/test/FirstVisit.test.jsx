@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ChakraProvider } from "@chakra-ui/react";
-import FirstVisit, { shouldShowTour } from "../components/FirstVisit";
+import FirstVisit from "../components/FirstVisit";
+import { shouldShowTour } from "../utils/tourState";
 import theme from "../theme";
 
 const show = (props = {}) =>

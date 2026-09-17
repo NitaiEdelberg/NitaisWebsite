@@ -1,0 +1,70 @@
+# Every push and pull request, gated in the order that fails fastest.
+#
+# This repo had no test workflow at all, so a broken test only surfaced when
+# somebody ran it locally — which meant it surfaced when somebody remembered
+# to. Render deploys on push to main, so the deploy is now guarded by whatever
+# runs here: a red job means the commit is visibly broken before it is live.
+#
+# Nothing here needs a Groq key or a network. The journey tests run against a
+# real MongoDB started in-process by mongodb-memory-server, with the model and
+# the film database swapped through the provider seam — so they exercise real
+# schemas, real indexes and real ownership rules without a bill or a flake.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Unit and journey tests
+        run: |
+          set +e
+          npm test 2>&1 | tee /tmp/backend-tests.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            {
+              echo '### Backend tests failed'
+              echo '```'
+              grep -E "^not ok|^  error|# (pass|fail)" /tmp/backend-tests.log | head -40
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$code"
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci --prefix frontend
+
+      - name: Lint
+        run: npm run lint --prefix frontend
+
+      - name: Component tests
+        run: npm run test --prefix frontend -- --run
+
+      # Last, because a build failure is the slowest signal and the cheapest
+      # to catch from the two steps above.
+      - name: Build
+        run: npm run build --prefix frontend

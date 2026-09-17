@@ -32,6 +32,12 @@ export default [
     },
   },
   {
+    // Build config runs in Node, not the browser: it reads process.env to point
+    // the dev proxy at a backend.
+    files: ['vite.config.js', 'eslint.config.js'],
+    languageOptions: { globals: globals.node },
+  },
+  {
     // Test files use Vitest globals (vi, describe, it, expect) and Node's global.
     files: ['**/*.test.{js,jsx}', 'src/test/**'],
     languageOptions: {
