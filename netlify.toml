@@ -1,22 +1,31 @@
-# Netlify config — deploys the React frontend to Netlify's CDN (instant load,
-# always on) while the Express + MongoDB backend keeps running on Render as a
-# pure API.
+# The whole app on Netlify: the React build on the CDN, and the Express API as
+# a serverless function beside it.
 #
-# The app fetches relative paths like /api/movies. The redirect below proxies
-# those to the Render backend, so:
-#   • the frontend code needs NO change (still same-origin from the browser's view)
-#   • no CORS setup is needed (Netlify proxies server-side)
-#   • the page shell loads instantly from the CDN even if the backend is cold.
+# It used to be a CDN frontend proxying /api to a Render instance. That instance
+# sleeps after 15 minutes idle and takes 60-90 seconds to wake, so the first
+# visitor of the day waited a minute for an empty watchlist. A function
+# cold-starts in about a second, and a warm one in milliseconds.
+#
+# Render still runs from backend/server.js and still works — this does not
+# delete that path, it stops depending on it.
 
 [build]
-  base = "frontend"
-  command = "npm install && npm run build"
-  publish = "dist"
+  # Repo root, not frontend/: the function imports backend/, so the build has
+  # to install the root dependencies too.
+  command = "npm install && npm install --prefix frontend && npm run build --prefix frontend"
+  publish = "frontend/dist"
+  functions = "netlify/functions"
 
-# API calls → Render backend (server-side proxy, so it stays same-origin).
+[functions]
+  # esbuild bundles the function and its imports into one file, which keeps the
+  # cold start near a second instead of unpacking node_modules.
+  node_bundler = "esbuild"
+
+# Every API path goes to the one function, which routes internally through the
+# same Express app the server uses.
 [[redirects]]
   from = "/api/*"
-  to = "https://nitaiswebsite.onrender.com/api/:splat"
+  to = "/.netlify/functions/api/:splat"
   status = 200
   force = true
 
