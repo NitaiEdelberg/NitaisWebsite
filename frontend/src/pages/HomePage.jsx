@@ -23,6 +23,7 @@ import { Link } from "react-router-dom";
 import { useMovieStore } from "../store/movie";
 import MovieCard from "../components/MovieCard";
 import AiSuggestBox from "../components/AiSuggestBox";
+import FirstVisit from "../components/FirstVisit";
 import Landing from "../components/Landing";
 
 const StatPill = ({ label, value }) => (
@@ -98,6 +99,9 @@ const HomePage = () => {
   return (
     <Container maxW="1140px" px={4} py={{ base: 8, md: 12 }}>
       <VStack spacing={8} align="stretch">
+        {/* Shown once, and never to someone who already has films saved. */}
+        {hasFetched && <FirstVisit hasMovies={movies.length > 0} />}
+
         {/* Header + stats */}
         <Box>
           <Heading size="xl" letterSpacing="tight">

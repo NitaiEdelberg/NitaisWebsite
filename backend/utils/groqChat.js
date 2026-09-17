@@ -14,6 +14,33 @@
 
 export const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
+// Groq's free tier meters tokens per minute AND per day, per model. Both
+// refusals arrive as a 429; only one of them clears in seconds.
+const MAX_ATTEMPTS = Number(process.env.GROQ_MAX_ATTEMPTS || 3);
+// Groq states the wait it wants ("try again in 47s"). Honouring that is right
+// for a batch job and wrong here, where somebody is watching a spinner.
+const MAX_RETRY_WAIT_MS = Number(process.env.GROQ_MAX_RETRY_WAIT_MS || 6000);
+const TIMEOUT_MS = Number(process.env.GROQ_TIMEOUT_MS || 20000);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// True when the refusal is "this model's budget is spent for today". It cannot
+// clear in seconds whatever the retry hint says, so the only useful move is the
+// next model, which has its own daily budget.
+export function isDailyCap(status, payload) {
+  if (status !== 429) return false;
+  const msg = JSON.stringify(payload || "").toLowerCase();
+  return msg.includes("per day") || msg.includes("tpd");
+}
+
+// Seconds the upstream asked us to wait, if it said.
+export function retryAfterMs(response, payload) {
+  const header = response?.headers?.get?.("retry-after");
+  if (header && !Number.isNaN(Number(header))) return Number(header) * 1000;
+  const found = JSON.stringify(payload || "").match(/try again in ([\d.]+)\s*s/i);
+  return found ? Number(found[1]) * 1000 : null;
+}
+
 export const modelCandidates = (configured = process.env.GROQ_MODEL) =>
   [configured, "openai/gpt-oss-120b", "openai/gpt-oss-20b"].filter(
     (m, i, all) => m && all.indexOf(m) === i
@@ -40,28 +67,73 @@ export const _resetWorkingModel = () => {
 
 export async function groqChat(body, { fetchImpl = fetch, apiKey = process.env.GROQ_API_KEY } = {}) {
   let lastError = null;
+  const trace = { calls: [], models: [] };
 
-  for (const model of workingModel ? [workingModel] : modelCandidates()) {
-    const response = await fetchImpl(GROQ_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ ...body, model }),
-    });
+  // The remembered model goes FIRST, not INSTEAD: a model that answered all day
+  // is exactly the one that hits its daily cap mid-request, and the chain
+  // behind it has to still be there when it does.
+  const candidates = workingModel
+    ? [workingModel, ...modelCandidates().filter((m) => m !== workingModel)]
+    : modelCandidates();
 
-    const payload = await response.json();
-    if (response.ok && payload.choices?.length) {
-      workingModel = model;
-      return payload;
+  for (const model of candidates) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const started = Date.now();
+      let response;
+      let payload;
+
+      try {
+        response = await fetchImpl(GROQ_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({ ...body, model }),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+        payload = await response.json();
+      } catch (err) {
+        trace.calls.push({ model, ms: Date.now() - started, status: 0 });
+        lastError = new Error("AI API unreachable");
+        lastError.status = 503;
+        lastError.details = { message: err.message };
+        break; // next model rather than retrying a dead socket
+      }
+
+      trace.calls.push({
+        model,
+        ms: Date.now() - started,
+        status: response.status,
+        tokens: payload?.usage?.total_tokens,
+      });
+
+      if (response.ok && payload.choices?.length) {
+        workingModel = model;
+        trace.models.push(model);
+        return { ...payload, trace };
+      }
+
+      lastError = new Error("AI API error");
+      lastError.details = payload;
+      lastError.status = response.status || 500;
+      lastError.model = model;
+
+      if (modelIsGone(response.status, payload) || isDailyCap(response.status, payload)) {
+        if (workingModel === model) workingModel = null;
+        break; // this model cannot serve; try the next
+      }
+
+      const transient = response.status === 429 || response.status >= 500;
+      if (!transient) throw lastError; // a bad key is still bad on attempt three
+
+      const asked = retryAfterMs(response, payload);
+      if (asked && asked > MAX_RETRY_WAIT_MS) break; // longer than a person waits
+      if (attempt < MAX_ATTEMPTS) {
+        const backoff = asked || 400 * 2 ** (attempt - 1);
+        await sleep(Math.min(backoff, MAX_RETRY_WAIT_MS) * (0.75 + Math.random() * 0.5));
+      }
     }
-
-    lastError = new Error("AI API error");
-    lastError.details = payload;
-    lastError.status = response.status || 500;
-    lastError.model = model;
-    if (!modelIsGone(response.status, payload)) throw lastError;
   }
 
   throw lastError;

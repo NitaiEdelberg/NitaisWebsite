@@ -50,19 +50,92 @@ test("the model that worked is remembered", async () => {
   ]);
 });
 
-test("real API errors are not retried away", async () => {
+test("an error that will not clear is not retried", async () => {
+  // A bad key is still bad on the third attempt.
   _resetWorkingModel();
   delete process.env.GROQ_MODEL;
   const tried = [];
   const fetchImpl = async (_url, opts) => {
     tried.push(JSON.parse(opts.body).model);
-    return { ok: false, status: 429, json: async () => ({ error: { message: "rate limit" } }) };
+    return { ok: false, status: 401, json: async () => ({ error: { message: "invalid api key" } }) };
   };
   await assert.rejects(
     () => groqChat({ messages: [] }, { fetchImpl, apiKey: "k" }),
-    (err) => err.status === 429
+    (err) => err.status === 401
   );
-  assert.equal(tried.length, 1, "a rate limit must not burn through the fallback list");
+  assert.equal(tried.length, 1);
+});
+
+test("a per-minute rate limit is retried on the same model", async () => {
+  // Being told to slow down is not a reason to abandon a working model.
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  const tried = [];
+  const fetchImpl = async (_url, opts) => {
+    tried.push(JSON.parse(opts.body).model);
+    if (tried.length > 2) {
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "{}" } }] }) };
+    }
+    return { ok: false, status: 429, json: async () => ({ error: { message: "rate limit reached" } }) };
+  };
+  const data = await groqChat({ messages: [] }, { fetchImpl, apiKey: "k" });
+  assert.ok(data.choices.length);
+  assert.deepEqual(tried, ["openai/gpt-oss-120b", "openai/gpt-oss-120b", "openai/gpt-oss-120b"]);
+});
+
+test("a daily cap skips the retries and takes the next model", async () => {
+  // The refusal that took the other project down: a day's budget does not come
+  // back in the 30 seconds its retry hint claims, so retrying burns the request.
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  const tried = [];
+  const fetchImpl = async (_url, opts) => {
+    const model = JSON.parse(opts.body).model;
+    tried.push(model);
+    if (model === "openai/gpt-oss-120b") {
+      return {
+        ok: false, status: 429,
+        json: async () => ({ error: { message:
+          "Rate limit reached for model `openai/gpt-oss-120b` on tokens per day (TPD): Limit 200000. Please try again in 31.9s." } }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "{}" } }] }) };
+  };
+  await groqChat({ messages: [] }, { fetchImpl, apiKey: "k" });
+  assert.deepEqual(tried, ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]);
+});
+
+test("the remembered model keeps the chain behind it", async () => {
+  // Remembering what worked is an optimisation; returning ONLY it deletes the
+  // fallback at the moment the remembered model runs out of daily budget.
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  let capped = false;
+  const fetchImpl = async (_url, opts) => {
+    const model = JSON.parse(opts.body).model;
+    if (model === "openai/gpt-oss-120b" && capped) {
+      return { ok: false, status: 429,
+        json: async () => ({ error: { message: "tokens per day (TPD) limit reached" } }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "{}" } }] }) };
+  };
+  await groqChat({ messages: [] }, { fetchImpl, apiKey: "k" });  // remembers 120b
+  capped = true;
+  const data = await groqChat({ messages: [] }, { fetchImpl, apiKey: "k" });
+  assert.ok(data.choices.length, "the chain behind the remembered model still answered");
+});
+
+test("every call is traced with its model, latency and tokens", async () => {
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  const fetchImpl = async () => ({
+    ok: true, status: 200,
+    json: async () => ({ choices: [{ message: { content: "{}" } }], usage: { total_tokens: 812 } }),
+  });
+  const data = await groqChat({ messages: [] }, { fetchImpl, apiKey: "k" });
+  assert.equal(data.trace.calls.length, 1);
+  assert.equal(data.trace.calls[0].tokens, 812);
+  assert.equal(data.trace.models[0], "openai/gpt-oss-120b");
 });
 
 test("it gives up once every candidate is retired", async () => {

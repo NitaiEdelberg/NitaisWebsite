@@ -17,14 +17,18 @@ import {
 } from "@chakra-ui/react";
 import { FaMagic, FaStar } from "react-icons/fa";
 import { generatePoster } from "../utils/posterFallback";
+import { avoidList, rememberRejected, rememberShown } from "../utils/suggestionMemory";
 
 const AiSuggestBox = () => {
   const [input, setInput] = useState("");
   const [movies, setMovies] = useState(null);
   const [source, setSource] = useState("");
   const [loading, setLoading] = useState(false);
-  // Titles already shown, so "Suggest more" doesn't repeat them.
-  const [seen, setSeen] = useState([]);
+  const [report, setReport] = useState(null);
+  const [slow, setSlow] = useState(false);
+  // What was shown, kept in localStorage rather than in state: this used to
+  // reset on every reload, so the same prompt returned the same five films
+  // tomorrow. The server also excludes everything already in your library.
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -34,6 +38,10 @@ const AiSuggestBox = () => {
       return;
     }
     setLoading(true);
+    setReport(null);
+    // A free instance can take a while to wake, and an unexplained wait reads
+    // as broken. Say so rather than spinning silently.
+    const slowTimer = setTimeout(() => setSlow(true), 4000);
     try {
       const token = localStorage.getItem("token");
       const res = await fetch("/api/ai/recommend", {
@@ -42,7 +50,9 @@ const AiSuggestBox = () => {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt: input, exclude: more ? seen : [] }),
+        // Always send the memory, not only when asking for more: a fresh
+        // request for the same mood should not return yesterday's five films.
+        body: JSON.stringify({ prompt: input, exclude: avoidList() }),
       });
       if (res.status === 401) {
         toast({ title: "Please log in again to use AI picks.", status: "warning", duration: 3000 });
@@ -53,7 +63,8 @@ const AiSuggestBox = () => {
       if (data.success && Array.isArray(data.movies) && data.movies.length) {
         setMovies(data.movies);
         setSource(data.source || "");
-        setSeen((prev) => [...new Set([...prev, ...data.movies.map((m) => m.title)])]);
+        setReport(data.trace || null);
+        rememberShown(data.movies.map((m) => m.title));
       } else {
         setMovies([]);
         toast({
@@ -66,6 +77,8 @@ const AiSuggestBox = () => {
     } catch {
       toast({ title: "Could not reach the AI service", status: "error", duration: 3000 });
     } finally {
+      clearTimeout(slowTimer);
+      setSlow(false);
       setLoading(false);
     }
   };
@@ -127,6 +140,13 @@ const AiSuggestBox = () => {
           </InputRightElement>
         </InputGroup>
 
+        {loading && slow && (
+          <Text fontSize="xs" color="text.muted">
+            Still working. The first request after a quiet spell wakes the server,
+            which takes a few seconds longer than the rest.
+          </Text>
+        )}
+
         {movies && movies.length > 0 && (
           <>
             <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={3} mt={1}>
@@ -169,9 +189,22 @@ const AiSuggestBox = () => {
                     <Text color="text.muted" fontSize="xs" mt={1} noOfLines={3}>
                       {m.overview || "No description available."}
                     </Text>
-                    <Button colorScheme="brand" size="xs" mt={2} onClick={() => addToLibrary(m)}>
-                      Add to library
-                    </Button>
+                    <HStack spacing={2} mt={2}>
+                      <Button colorScheme="brand" size="xs" onClick={() => addToLibrary(m)}>
+                        Add to library
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        color="text.muted"
+                        onClick={() => {
+                          rememberRejected(m.title);
+                          setMovies((current) => (current || []).filter((x) => x.title !== m.title));
+                        }}
+                      >
+                        Not for me
+                      </Button>
+                    </HStack>
                   </Box>
                 </HStack>
               ))}
@@ -181,7 +214,7 @@ const AiSuggestBox = () => {
               <Button variant="subtle" size="sm" onClick={() => getSuggestions({ more: true })} isLoading={loading}>
                 Suggest more
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => { setMovies(null); setSeen([]); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setMovies(null); setReport(null); }}>
                 Clear
               </Button>
               {source && (
@@ -190,6 +223,18 @@ const AiSuggestBox = () => {
                 </Badge>
               )}
             </HStack>
+
+            {report && (
+              <Text fontSize="xs" color="text.muted">
+                The model named {report.proposed}; {report.verified} matched a real film
+                {report.unverifiable > 0 &&
+                  `, ${report.unverifiable} could not be verified and ${report.unverifiable === 1 ? "was" : "were"} dropped`}
+                {report.repeats_blocked > 0 && `, ${report.repeats_blocked} you already had`}
+                {report.excluded > 0 && ` · avoiding ${report.excluded} you have seen or saved`}
+                {report.taste_signals > 0 && ` · tuned to ${report.taste_signals} films you rated highly`}
+                .
+              </Text>
+            )}
           </>
         )}
       </VStack>
