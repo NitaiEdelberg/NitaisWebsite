@@ -65,9 +65,46 @@ export const _resetWorkingModel = () => {
   workingModel = null;
 };
 
+// Groq expects a schema inside response_format, not as a top-level field, and
+// silently rejects the whole request with a 400 if one appears there. Pulled
+// out and translated here so callers can pass `schema` and not know that.
+//
+// Schema-constrained decoding also fails in a second way worth handling
+// separately: Groq implements it through its tool-calling path, and the model
+// sometimes answers with a tool call instead of the JSON, which Groq rejects as
+// tool_use_failed. That is a bad roll, not a capability — drop the schema for
+// THIS request and try again rather than giving up on schemas everywhere.
+function withSchema(body) {
+  const { schema, ...rest } = body || {};
+  if (!schema) return { request: rest, hadSchema: false };
+  return {
+    request: {
+      ...rest,
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "response", schema, strict: false },
+      },
+    },
+    hadSchema: true,
+  };
+}
+
+function schemaWasRejected(status, payload) {
+  if (status !== 400) return false;
+  const msg = JSON.stringify(payload || "").toLowerCase();
+  return (
+    msg.includes("json_schema") ||
+    msg.includes("response_format") ||
+    msg.includes("tool_use_failed") ||
+    msg.includes("called a tool")
+  );
+}
+
 export async function groqChat(body, { fetchImpl = fetch, apiKey = process.env.GROQ_API_KEY } = {}) {
   let lastError = null;
   const trace = { calls: [], models: [] };
+  // Local to this call, so one bad roll does not disable schemas globally.
+  let { request: payloadBody, hadSchema } = withSchema(body);
 
   // The remembered model goes FIRST, not INSTEAD: a model that answered all day
   // is exactly the one that hits its daily cap mid-request, and the chain
@@ -89,7 +126,7 @@ export async function groqChat(body, { fetchImpl = fetch, apiKey = process.env.G
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({ ...body, model }),
+          body: JSON.stringify({ ...payloadBody, model }),
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });
         payload = await response.json();
@@ -118,6 +155,13 @@ export async function groqChat(body, { fetchImpl = fetch, apiKey = process.env.G
       lastError.details = payload;
       lastError.status = response.status || 500;
       lastError.model = model;
+
+      // Our request was wrong, not the upstream: ask for less and try again.
+      if (hadSchema && schemaWasRejected(response.status, payload)) {
+        ({ request: payloadBody } = withSchema({ ...body, schema: undefined }));
+        hadSchema = false;
+        continue;
+      }
 
       if (modelIsGone(response.status, payload) || isDailyCap(response.status, payload)) {
         if (workingModel === model) workingModel = null;

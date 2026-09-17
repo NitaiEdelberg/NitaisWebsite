@@ -165,3 +165,50 @@ test("candidates are de-duplicated and keep the configured model first", () => {
   ]);
   assert.equal(modelCandidates(undefined)[0], "openai/gpt-oss-120b");
 });
+
+
+test("a schema is translated into response_format, never sent as a raw field", async () => {
+  // Groq rejects an unknown top-level field with a 400, which is how the whole
+  // recommendation route broke in production while every test passed: the fake
+  // chat ignored the extra field that the real API refuses.
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  let sent;
+  const fetchImpl = async (_url, opts) => {
+    sent = JSON.parse(opts.body);
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "{}" } }] }) };
+  };
+
+  await groqChat(
+    { messages: [], schema: { type: "object", properties: { ok: { type: "boolean" } } } },
+    { fetchImpl, apiKey: "k" }
+  );
+
+  assert.equal(sent.schema, undefined, "no bare schema field reaches the API");
+  assert.equal(sent.response_format.type, "json_schema");
+  assert.equal(sent.response_format.json_schema.schema.type, "object");
+});
+
+test("a rejected schema is dropped and the call retried without it", async () => {
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  const formats = [];
+  const fetchImpl = async (_url, opts) => {
+    const body = JSON.parse(opts.body);
+    formats.push(body.response_format?.type);
+    if (body.response_format?.type === "json_schema") {
+      return {
+        ok: false, status: 400,
+        json: async () => ({ error: { message: "Tool choice is none, but model called a tool", code: "tool_use_failed" } }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "{}" } }] }) };
+  };
+
+  const data = await groqChat(
+    { messages: [], response_format: { type: "json_object" }, schema: { type: "object" } },
+    { fetchImpl, apiKey: "k" }
+  );
+  assert.ok(data.choices.length);
+  assert.deepEqual(formats, ["json_schema", "json_object"]);
+});
