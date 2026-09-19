@@ -272,8 +272,12 @@ export default function RecommendChat() {
                 used to be invisible. */}
             {turn.trace && (
               <Text fontSize="xs" color="text.muted" px={1}>
+                {turn.trace.constraint && `${turn.trace.constraint} · `}
+                {turn.trace.source === "catalogue" && "from the film catalogue · "}
                 {turn.trace.proposed} suggested · {turn.trace.verified} verified as real
                 {turn.trace.unverifiable > 0 && ` · ${turn.trace.unverifiable} dropped as unverifiable`}
+                {turn.trace.dropped_outside_constraint > 0 &&
+                  ` · ${turn.trace.dropped_outside_constraint} dropped for being outside ${turn.trace.constraint}`}
                 {turn.trace.blocked_as_seen > 0 && ` · ${turn.trace.blocked_as_seen} you'd already seen`}
                 {turn.trace.preferences_used > 0 && ` · using ${turn.trace.preferences_used} things I know about your taste`}
               </Text>

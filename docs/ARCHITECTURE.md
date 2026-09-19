@@ -96,6 +96,38 @@ vocabulary (`genre`, `tone`, `era`, `language`, `theme`, `avoid` ×
 `GET /api/ai/memory` returns what is believed and why. `DELETE` forgets it.
 Memory that cannot be inspected cannot be trusted or corrected.
 
+## Constraints, and the model's knowledge cutoff
+
+Someone asked for *"a new comedy film from 2026, similar to The Dictator"* and
+got films from 1999, 2004 and 2010. Three failures stacked, only one of them the
+model's:
+
+1. Nothing extracted "2026" as a requirement — it was words in a prompt.
+2. Nothing enforced it afterwards, so three films from the wrong century passed
+   verification and ranking.
+3. The prompt asked for *"at least three decades"*, which is right for "something
+   funny" and exactly wrong for "something from 2026".
+
+Underneath all three is the thing no prompt fixes: **a model cannot know about
+films released after its training data ends.** Asking for 2026 releases does not
+produce 2026 releases, it produces confident guesses.
+
+So:
+
+- `constraints.js` reads year windows deterministically — "from 2026", "the 90s",
+  "before 2000", "since 2015", "the last 3 years", "new", "classic". Patterns run
+  most specific first, so `before 2000` is not eaten by the bare year inside it.
+- The constraint is **enforced in code after verification**, because the model's
+  claimed year is a guess and verification replaces it with the real one.
+- The prompt is told the requirement overrides the spread rule.
+- A request for years past `MODEL_KNOWLEDGE_YEAR` is routed to **TMDb discover**
+  (`catalogue.js`) when a key is configured — recency is a retrieval problem, not
+  a generation one.
+- With no catalogue key, the system **says so**: "what I know about films stops
+  around 2025, and anything I offered for this year would be a guess dressed up
+  as a fact." Returning something from 1999 and hoping nobody checks is the
+  failure being prevented.
+
 ## Caching
 
 | Cached | Key | TTL | Why |
@@ -232,6 +264,38 @@ wrong thing once".
 **Tradeoff.** Slower to learn, and a real preference stated obliquely may be
 missed. A missed preference costs one mediocre suggestion; an invented one is
 remembered forever.
+
+## Constraints, and the model's knowledge cutoff
+
+Someone asked for *"a new comedy film from 2026, similar to The Dictator"* and
+got films from 1999, 2004 and 2010. Three failures stacked, only one of them the
+model's:
+
+1. Nothing extracted "2026" as a requirement — it was words in a prompt.
+2. Nothing enforced it afterwards, so three films from the wrong century passed
+   verification and ranking.
+3. The prompt asked for *"at least three decades"*, which is right for "something
+   funny" and exactly wrong for "something from 2026".
+
+Underneath all three is the thing no prompt fixes: **a model cannot know about
+films released after its training data ends.** Asking for 2026 releases does not
+produce 2026 releases, it produces confident guesses.
+
+So:
+
+- `constraints.js` reads year windows deterministically — "from 2026", "the 90s",
+  "before 2000", "since 2015", "the last 3 years", "new", "classic". Patterns run
+  most specific first, so `before 2000` is not eaten by the bare year inside it.
+- The constraint is **enforced in code after verification**, because the model's
+  claimed year is a guess and verification replaces it with the real one.
+- The prompt is told the requirement overrides the spread rule.
+- A request for years past `MODEL_KNOWLEDGE_YEAR` is routed to **TMDb discover**
+  (`catalogue.js`) when a key is configured — recency is a retrieval problem, not
+  a generation one.
+- With no catalogue key, the system **says so**: "what I know about films stops
+  around 2025, and anything I offered for this year would be a guess dressed up
+  as a fact." Returning something from 1999 and hoping nobody checks is the
+  failure being prevented.
 
 ## Caching film facts but never recommendations
 

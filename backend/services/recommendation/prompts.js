@@ -85,12 +85,21 @@ export function buildRecommendationPrompt(context) {
     );
   }
 
+  // A stated constraint outranks everything else in the prompt, including the
+  // spread rule below — which is right for "something funny" and exactly wrong
+  // for "something from 2026".
+  if (context.constraint) {
+    parts.push(`
+
+A HARD REQUIREMENT: every film must be ${context.constraint}. This is not a preference to balance against variety — a film outside it is wrong, however well it fits otherwise, and it will be discarded before the person sees it. If you cannot think of eight that qualify, give fewer.`);
+  }
+
   parts.push(`
 
 Suggest 8 films.
 
-MAKE THEM DIFFERENT FROM EACH OTHER:
-- Span at least three decades, unless they asked for one era.
+MAKE THEM DIFFERENT FROM EACH OTHER:${context.constraint ? "\n- (The release-year requirement above overrides the spread rule.)" : ""}
+- Span at least three decades, unless they asked for one era or a specific year.
 - At most two films from the same director, franchise or series.
 - Include at least two a casual viewer would not have heard of. The eight most obvious films is a worse answer even when every one fits.
 - Never pad the list with an acclaimed film that does not fit the request.

@@ -36,7 +36,7 @@ export const LIMITS = {
  * Returns plain data, not a string: the prompt builder decides wording, this
  * decides relevance, and keeping those apart is what makes both testable.
  */
-export function buildContext({ message, session, library = {}, extraAvoid = [] }) {
+export function buildContext({ message, session, library = {}, extraAvoid = [], constraints = null }) {
   const preferences = activePreferences(session?.preferences || []).slice(
     0,
     LIMITS.preferences
@@ -59,6 +59,9 @@ export function buildContext({ message, session, library = {}, extraAvoid = [] }
 
   return {
     message,
+    // A phrase like "from 2026" or "from the 1990s", or null. Told to the model
+    // so its own ordering respects it, and enforced in code regardless.
+    constraint: constraints?.describe || null,
     turns,
     summary: (session?.summary || "").slice(0, LIMITS.summaryChars),
     preferences,
@@ -67,6 +70,7 @@ export function buildContext({ message, session, library = {}, extraAvoid = [] }
     // Reported back to the caller so a slow or strange request can be explained
     // by what went into it, rather than guessed at.
     sizes: {
+      constrained: Boolean(constraints?.year),
       turns: turns.length,
       preferences: preferences.length,
       avoid: avoid.length,

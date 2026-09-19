@@ -174,6 +174,11 @@ export const forgetMemory = async (req, res) => {
 // The trace a user is allowed to see: counts, not prompts.
 function publicTrace(result) {
   return {
+    // What was read as a hard requirement, and what it cost.
+    constraint: result.trace.constraint?.label || null,
+    dropped_outside_constraint:
+      result.trace.constraint_enforcement?.dropped_outside_constraint || 0,
+    source: result.trace.source?.from || "model",
     proposed: result.trace.validation.proposed,
     verified: result.trace.verification.verified,
     unverifiable: result.trace.verification.unverifiable,
@@ -186,6 +191,9 @@ function publicTrace(result) {
 }
 
 const flatten = (trace) => ({
+  constraint: trace.constraint?.label || null,
+  constraint_dropped: trace.constraint_enforcement?.dropped_outside_constraint || 0,
+  candidates_from: trace.source?.from || "model",
   ctx_turns: trace.context.turns,
   ctx_prefs: trace.context.preferences,
   ctx_avoid: trace.context.avoid,

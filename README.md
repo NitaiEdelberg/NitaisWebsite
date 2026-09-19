@@ -58,6 +58,12 @@ sort and filter. Every library is private to its account, enforced server-side.
 - what you told it about your taste — and separately, what it has merely
   guessed, which needs to recur three times before it counts.
 
+**Constraints are enforced, not hoped for.** Ask for "a comedy from the 90s" and
+anything outside 1990–1999 is dropped after verification, with the count shown.
+Ask for something newer than the model can possibly know about and it either
+looks it up in a real catalogue or tells you it cannot — rather than quietly
+answering with a film from 1999.
+
 **What it shows you.** The model's one-line reason is labelled *why this*;
 everything beside it comes from a film database. Under each answer, how many
 suggestions were proposed, verified and discarded.

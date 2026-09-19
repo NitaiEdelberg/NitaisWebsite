@@ -20,6 +20,8 @@ import { providers } from "../providers.js";
 import { findInjection, sanitiseMessage } from "../../utils/untrusted.js";
 import { movieFactCache } from "../../utils/cache.js";
 import { buildContext, estimateTokens } from "./context.js";
+import { catalogueAvailable, discover } from "./catalogue.js";
+import { enforce, explainShortfall, extractConstraints } from "./constraints.js";
 import {
   appendTurn, compactIfNeeded, rememberRejected, rememberShown,
 } from "./conversation.js";
@@ -29,6 +31,13 @@ import { parseRecommendation } from "./validate.js";
 import { rankAndDiversify } from "./rank.js";
 
 export const RESULT_LIMIT = 5;
+
+// Used when the candidates came from the catalogue rather than the model, so
+// there is no model-written sentence to show.
+const defaultReply = (constraints) =>
+  constraints?.year
+    ? `Here's what actually came out ${constraints.year.label}, most talked-about first.`
+    : "Here are a few.";
 
 /**
  * One turn of the conversation.
@@ -60,74 +69,132 @@ export async function recommend({
   // and the defences that matter are the ones after the model, not before it.
   const injection = findInjection(clean);
 
-  const context = buildContext({ message: clean, session, library, extraAvoid });
-  const prompt = buildRecommendationPrompt(context);
+  // What was actually asked for, as a rule rather than as words in a prompt.
+  const constraints = extractConstraints(clean);
+  const context = buildContext({ message: clean, session, library, extraAvoid, constraints });
 
-  const stages = { context: { ...context.sizes, estimated_tokens: estimateTokens(context) } };
-
-  // ---- the model proposes ------------------------------------------------
-  const modelStarted = now();
-  const completion = await chat({
-    temperature: 0.5,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: prompt.system },
-      { role: "user", content: prompt.user },
-    ],
-    schema: RECOMMENDATION_SCHEMA,
-  });
-  stages.model = {
-    ms: now() - modelStarted,
-    models: completion.trace?.models || [],
-    tokens: (completion.trace?.calls || []).reduce((sum, c) => sum + (c.tokens || 0), 0),
+  const stages = {
+    context: { ...context.sizes, estimated_tokens: estimateTokens(context) },
+    constraint: constraints.year
+      ? { ...constraints.year, needs_catalogue: constraints.needsCatalogue }
+      : null,
   };
 
-  // ---- the application validates ----------------------------------------
-  const parsed = parseRecommendation(completion.choices?.[0]?.message?.content);
-  stages.validation = { proposed: parsed.movies.length, problems: parsed.problems };
+  // ---- where the candidates come from ------------------------------------
+  //
+  // A request for films newer than the model's training data is a retrieval
+  // problem, not a generation problem: asking the model produces confident
+  // guesses, and no prompt fixes that. Those go to the catalogue; everything
+  // else goes to the model, which is far better at "like The Dictator".
+  let parsed = null;
+  let candidates = [];
+  let preVerified = false;
+  let modelReply = "";
+  // Which prompt produced this answer — "catalogue" when no prompt did.
+  let promptVersion = "catalogue";
 
-  if (!parsed.ok) {
-    const error = new Error("unusable model output");
-    error.status = 502;
-    error.details = parsed.problems;
-    error.userMessage = "That came back garbled. Try asking again?";
-    throw error;
+  if (constraints.needsCatalogue && catalogueAvailable()) {
+    const catalogueStarted = now();
+    const found = await discover({ constraints, message: clean, limit: 10 });
+    candidates = found.movies;
+    preVerified = true;
+    stages.source = { from: "catalogue", found: candidates.length, genre: found.genre };
+    stages.model = { ms: now() - catalogueStarted, models: [], tokens: 0 };
+  } else {
+    const prompt = buildRecommendationPrompt(context);
+    promptVersion = prompt.version;
+    const modelStarted = now();
+    const completion = await chat({
+      temperature: 0.5,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: prompt.system },
+        { role: "user", content: prompt.user },
+      ],
+      schema: RECOMMENDATION_SCHEMA,
+    });
+    stages.model = {
+      ms: now() - modelStarted,
+      models: completion.trace?.models || [],
+      tokens: (completion.trace?.calls || []).reduce((sum, c) => sum + (c.tokens || 0), 0),
+    };
+    stages.source = { from: "model", found: 0 };
+
+    // ---- the application validates ---------------------------------------
+    parsed = parseRecommendation(completion.choices?.[0]?.message?.content);
+    stages.validation = { proposed: parsed.movies.length, problems: parsed.problems };
+
+    if (!parsed.ok) {
+      const error = new Error("unusable model output");
+      error.status = 502;
+      error.details = parsed.problems;
+      error.userMessage = "That came back garbled. Try asking again?";
+      throw error;
+    }
+    candidates = parsed.movies;
+    modelReply = parsed.reply;
+    stages.source.found = candidates.length;
   }
+
+  stages.validation = stages.validation || { proposed: candidates.length, problems: [] };
 
   // ---- the film database decides what exists -----------------------------
   const verifyStarted = now();
-  const verified = await verify(parsed.movies);
-  const byTitle = new Map(parsed.movies.map((m) => [m.title.toLowerCase(), m]));
+  // Catalogue results came FROM the film database; re-verifying them against it
+  // is a round trip to be told what it just said.
+  const verified = preVerified ? candidates : await verify(candidates);
+  const byTitle = new Map(candidates.map((m) => [m.title.toLowerCase(), m]));
   const withReasons = verified.map((movie) => ({
     ...movie,
     // The model's reason survives verification; its facts do not.
-    why: byTitle.get((movie.title || "").toLowerCase())?.why || "",
+    why: movie.why || byTitle.get((movie.title || "").toLowerCase())?.why || "",
   }));
   stages.verification = {
     ms: now() - verifyStarted,
     verified: verified.length,
     // Titles the model named that no real film matches. The number this whole
     // design exists to keep at zero in what reaches the user.
-    unverifiable: parsed.movies.length - verified.length,
-    source: groundingProvider(),
+    unverifiable: candidates.length - verified.length,
+    source: preVerified ? "tmdb" : groundingProvider(),
     cache: movieFactCache.stats(),
+  };
+
+  // ---- the stated requirement is enforced here, not hoped for ------------
+  //
+  // After verification, because the model's claimed year is a guess and
+  // verification replaces it with the real one. Filtering on the guess would
+  // drop films that qualify and keep films that do not.
+  const { kept, dropped } = enforce(withReasons, constraints);
+  stages.constraint_enforcement = {
+    dropped_outside_constraint: dropped.length,
+    examples: dropped.slice(0, 3).map((m) => `${m.title} (${m.year || "?"})`),
   };
 
   // ---- this file decides what is shown -----------------------------------
   const blocked = new Set(context.avoid.map((t) => t.toLowerCase().trim()));
-  const fresh = withReasons.filter((m) => !blocked.has((m.title || "").toLowerCase().trim()));
-  stages.filtering = { blocked_as_seen: withReasons.length - fresh.length };
+  const fresh = kept.filter((m) => !blocked.has((m.title || "").toLowerCase().trim()));
+  stages.filtering = { blocked_as_seen: kept.length - fresh.length };
 
   const movies = rankAndDiversify(fresh, { limit: RESULT_LIMIT });
   stages.ranking = { shown: movies.length, from: fresh.length };
 
-  const reply = movies.length ? parsed.reply : nothingFoundReply(context.avoid.length > 0);
+  // A constraint that could not be honoured is said out loud. Returning a film
+  // from 1999 for a request about 2026 and letting the person notice is the
+  // failure this whole path exists to prevent.
+  const shortfall = explainShortfall(constraints, {
+    catalogueAvailable: catalogueAvailable(),
+    foundAny: movies.length > 0,
+  });
+
+  const reply =
+    shortfall ||
+    (movies.length ? modelReply || defaultReply(constraints) : nothingFoundReply(context.avoid.length > 0));
 
   return {
     reply,
     movies,
     injection,
-    prompt_version: prompt.version,
+    prompt_version: promptVersion,
     trace: { ...stages, total_ms: now() - startedAt },
   };
 }
