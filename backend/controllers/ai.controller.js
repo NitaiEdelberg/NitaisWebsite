@@ -100,13 +100,26 @@ export const getMovieRecommendation = async (req, res) => {
     });
 
     const status = error.status || 502;
+
+    // A rejected credential is an operator problem, and "try again" is useless
+    // advice for it. Saying which kind of failure this is turned a half-hour of
+    // guessing into one look at the environment variables, when a deployment
+    // went live without its key.
+    const misconfigured = status === 401 || status === 403 ||
+      /invalid[_ ]api[_ ]key|api key/i.test(JSON.stringify(error.details || ""));
+    if (misconfigured) {
+      logEvent("ai.misconfigured", { request_id: req.id, status });
+    }
+
     return res.status(status === 429 ? 429 : status).json({
       success: false,
       message:
         error.userMessage ||
-        (status === 429
-          ? "The recommender is busy right now. Try again in a minute."
-          : "The recommender is unavailable right now. The rest of your library still works."),
+        (misconfigured
+          ? "This deployment's AI key is missing or rejected, so recommendations are off. Everything else works — whoever runs this needs to check GROQ_API_KEY."
+          : status === 429
+            ? "The recommender is busy right now. Try again in a minute."
+            : "The recommender is unavailable right now. The rest of your library still works."),
     });
   }
 };

@@ -124,7 +124,12 @@ export async function recommend({
     parsed = parseRecommendation(completion.choices?.[0]?.message?.content);
     stages.validation = { proposed: parsed.movies.length, problems: parsed.problems };
 
-    if (!parsed.ok) {
+    // An empty list is an ANSWER, not a malformed reply. When a constraint
+    // cannot be met — "a comedy from 2026", which is past what the model
+    // knows — returning no films is the correct behaviour, and treating it as
+    // garbled output threw a 502 over exactly the case the honest-explanation
+    // path was built for. Only a reply with neither text nor films is unusable.
+    if (!parsed.reply && !parsed.movies.length) {
       const error = new Error("unusable model output");
       error.status = 502;
       error.details = parsed.problems;

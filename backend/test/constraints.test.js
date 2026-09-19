@@ -139,3 +139,37 @@ test("a year the model does know is answered normally and filtered to it", async
   assert.equal(result.trace.constraint_enforcement.dropped_outside_constraint, 1);
   assert.equal(result.reply, "Two from that year.");
 });
+
+
+test("an impossible constraint is explained, not reported as garbled output", async () => {
+  // The model correctly returns no films for a year it cannot know about.
+  // Treating an empty list as malformed output threw a 502 over precisely the
+  // case the honest explanation exists for — which is what production did.
+  const result = await recommend({
+    message: "nice comedy from 2026",
+    session: { messages: [], preferences: [], shown: [], rejected: [] },
+    chat: async () => ({
+      choices: [{ message: { content: JSON.stringify({
+        reply: "I don't know of any comedies from 2026.",
+        movies: [],
+      }) } }],
+      trace: { models: ["test"], calls: [] },
+    }),
+    verify: async () => [],
+  });
+
+  assert.deepEqual(result.movies, []);
+  assert.match(result.reply, /stops around/, "it explains the limit instead of erroring");
+});
+
+test("a reply with neither text nor films is still a failure", async () => {
+  await assert.rejects(
+    () => recommend({
+      message: "anything",
+      session: { messages: [], preferences: [], shown: [], rejected: [] },
+      chat: async () => ({ choices: [{ message: { content: "{}" } }] }),
+      verify: async () => [],
+    }),
+    (err) => err.status === 502
+  );
+});
