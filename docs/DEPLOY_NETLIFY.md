@@ -34,6 +34,25 @@ service (Environment tab) so both deployments talk to the same database.
 live, a token from one has to work on the other, or moving between them logs
 people out.
 
+### Do not copy `PORT`
+
+Copy the four variables above and nothing else. In particular, leave `PORT`
+behind: a serverless function has no port to listen on, so it does nothing — and
+Netlify's secrets scanner checks the build output for the value of every
+variable you set, finds `5000` sitting in `backend/server.js` as a local
+default, and fails the build:
+
+```
+Secret env var "PORT"'s value detected:
+  found value at line 10 in backend/server.js
+Secrets scanning found secrets in build.
+```
+
+`netlify.toml` exempts that one key so a wholesale copy of the Render
+environment still builds, but the cleaner answer is not to set it. Nothing else
+is exempted, and a real key appearing in build output should still fail the
+build.
+
 ## 3. Let Atlas accept the connection
 
 MongoDB Atlas → **Network Access**. Netlify functions have no fixed outbound IP,

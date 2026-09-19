@@ -16,6 +16,21 @@
   publish = "frontend/dist"
   functions = "netlify/functions"
 
+# Netlify scans the build output for the VALUE of every environment variable
+# set on the site, and fails the build when it finds one. That is the right
+# default for a key and the wrong one for PORT, whose value (5000) appears as a
+# local default in backend/server.js, the dev proxy target, and the README.
+#
+# The real fix is not to set PORT on Netlify at all — a serverless function has
+# no port to listen on, so the variable does nothing here. This line exists so
+# the build does not fail for anyone who copies the whole environment across
+# from Render, which is exactly what the deploy guide tells them to do.
+#
+# Nothing else is exempted. A key that showed up in the build output would
+# still fail the build, and should.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "PORT"
+
 [functions]
   # esbuild bundles the function and its imports into one file, which keeps the
   # cold start near a second instead of unpacking node_modules.
