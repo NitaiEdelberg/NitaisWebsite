@@ -231,6 +231,41 @@ refused" from "the parser broke".
 **Tradeoff.** Slightly more constrained output, and a provider that does not
 support schemas degrades to plain JSON mode.
 
+### The degradation ladder, and why it has three rungs
+
+Groq validates a non-strict schema *after* generation rather than constraining
+decoding, so a whole response is refused over one field — a year written
+`"1995"` rather than `1995`, a missing `why` on one row of eight. The refusal is
+a 400 with code `json_validate_failed`, and it carries what the model wrote in
+`failed_generation`.
+
+This cost two outages in one afternoon, because each rung was missing in turn:
+
+1. **Recognise it.** `schemaWasRejected()` looked for `json_schema` and
+   `tool_use_failed`. It did not know this code, and a 400 is not transient, so
+   the request was thrown on the spot. Seven of twelve live requests died here.
+
+2. **Read what came back.** The rejected generation is almost always a good
+   answer — `parseRecommendation` coerces string years and drops bad rows
+   individually rather than failing the whole response. Re-asking spends three
+   seconds and several hundred tokens of a metered daily budget to be handed
+   something already in memory.
+
+3. **Do not gate salvage on the schema.** Dropping the schema does not stop
+   this: plain JSON mode refuses unparseable content with the *same* code. The
+   second failure arrived with the schema already gone, so the ladder had no
+   rung left. Five of fifteen requests died here, after the first fix.
+
+Salvage reads leniently — the whole string, then the outermost braces — because
+the usual reason the content is "invalid" is a reasoning model narrating before
+it answers. The JSON is intact; it is just not the whole string. It is parsed,
+never evaluated, and must be an object, so a refusal with no answer in it still
+fails rather than becoming a fake success. Anything salvaged still faces
+validation and the film database, like all model output here.
+
+The general rule this encodes: **an upstream that hands back its own rejected
+work has given you an answer, not only an error.**
+
 ## Bounded context with compaction, not a growing transcript
 
 **Decision.** Six turns verbatim, everything older in one summary, hard caps on
