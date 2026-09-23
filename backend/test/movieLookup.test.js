@@ -48,6 +48,17 @@ const WIKI_DB = {
   },
 };
 
+// A title shared by an original and a remake. Wikipedia ranks the newer page
+// first, which is how a request for the 1953 classic came back as the 2024 one.
+const WIKI_MULTI = {
+  "the wages of fear": [
+    { index: 1, title: "The Wages of Fear (2024 film)", description: "2024 French film",
+      extract: "The Wages of Fear is a 2024 French action thriller film." },
+    { index: 2, title: "The Wages of Fear", description: "1953 film by Henri-Georges Clouzot",
+      extract: "The Wages of Fear is a 1953 French-Italian thriller film." },
+  ],
+};
+
 function makeWikiResponse(searchStr) {
   // searchStr is like "Inception 2010 film" — strip the trailing " film" and any year.
   const key = searchStr
@@ -56,6 +67,10 @@ function makeWikiResponse(searchStr) {
     .replace(/\b(19|20)\d{2}\b/g, "")
     .replace(/\s+/g, " ")
     .trim();
+  const many = WIKI_MULTI[key];
+  if (many) {
+    return { query: { pages: Object.fromEntries(many.map((p, i) => [String(i), p])) } };
+  }
   const page = WIKI_DB[key];
   if (!page) return { batchcomplete: "", query: undefined }; // no such film
   return { query: { pages: { "1": page } } };
@@ -180,4 +195,50 @@ test("groundingProvider reports wikipedia when no TMDB key is set", () => {
   // The test env has no TMDB_API_KEY, so the keyless provider is in play — this is
   // exactly the case the UI badge must label correctly.
   assert.equal(groundingProvider(), process.env.TMDB_API_KEY ? "tmdb" : "wikipedia");
+});
+
+
+// The grounding layer's job is to replace the model's guessed facts with real
+// ones. When a title belongs to two films, "real" is ambiguous, and taking the
+// top search result silently picked the wrong one: a request for something
+// tense came back "The Wages of Fear (2024)" for a model that plainly meant the
+// 1953 classic — with the model's sentence about the 1953 film attached to it.
+test("a remake does not stand in for the film that was asked for", async () => {
+  const stub = installFetchStub();
+  try {
+    const [found] = await verifyCandidates([
+      { title: "The Wages of Fear", year: 1953, why: "unbearable tension" },
+    ]);
+    assert.equal(found.year, 1953);
+    assert.match(found.url, /1953|Wages_of_Fear$/);
+  } finally {
+    stub.restore();
+  }
+});
+
+test("the newest film still wins when that is the one proposed", async () => {
+  const stub = installFetchStub();
+  try {
+    const [found] = await verifyCandidates([
+      { title: "The Wages of Fear", year: 2024, why: "a slick remake" },
+    ]);
+    assert.equal(found.year, 2024);
+  } finally {
+    stub.restore();
+  }
+});
+
+test("a year the model got wrong still resolves to the real film", async () => {
+  // The fallback that must survive: a guess a few years out is not a remake,
+  // and dropping the film would be worse than correcting the year.
+  const stub = installFetchStub();
+  try {
+    const [found] = await verifyCandidates([
+      { title: "Inception", year: 2011, why: "layered" },
+    ]);
+    assert.equal(found.title, "Inception");
+    assert.equal(found.year, 2010);
+  } finally {
+    stub.restore();
+  }
 });

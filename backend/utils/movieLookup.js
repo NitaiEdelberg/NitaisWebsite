@@ -125,6 +125,24 @@ async function verifyWithTmdb(title, year) {
 }
 
 // --- Wikipedia (keyless) ----------------------------------------------------
+
+// Read "2010 film" / "is a 2010 ... film" out of a page's own prose.
+function yearFromPage(page) {
+  const desc = page.description || "";
+  const extract = page.extract || "";
+  const found = desc.match(/(\d{4})\s+film/i) || extract.match(/\b(?:19|20)\d{2}\b/);
+  return found ? Number(found[0].match(/\d{4}/)[0]) : null;
+}
+
+function pageIsFilm(page) {
+  return /\bfilm\b/i.test(page.description || "") || /\bfilm\b/i.test(page.extract || "");
+}
+
+// How far the resolved year may sit from the proposed one before the two are
+// probably different films. The model's year is a guess and is often a year
+// out; a remake is decades out.
+const REMAKE_GAP = 3;
+
 async function verifyWithWikipedia(title, year) {
   const search = `${title}${year ? " " + year : ""} film`;
   const params = new URLSearchParams({
@@ -132,7 +150,11 @@ async function verifyWithWikipedia(title, year) {
     format: "json",
     generator: "search",
     gsrsearch: search,
-    gsrlimit: "1",
+    // More than one, so a title shared by an original and its remake can be
+    // told apart below. "The Wages of Fear" matched the 2024 remake for a
+    // request whose whole point was the 1953 one: the search puts the newer
+    // page first, and taking one result meant never seeing the other.
+    gsrlimit: "5",
     prop: "pageimages|extracts|description",
     exintro: "1",
     explaintext: "1",
@@ -146,24 +168,35 @@ async function verifyWithWikipedia(title, year) {
   );
   const pages = data.query?.pages;
   if (!pages) return null;
-  const page = Object.values(pages)[0];
-  if (!page?.title) return null;
 
-  const desc = page.description || "";
-  const extract = page.extract || "";
-  const isFilm = /\bfilm\b/i.test(desc) || /\bfilm\b/i.test(extract);
-  if (!isFilm) return null;
-  if (!titlesMatch(title, page.title)) return null;
+  // `index` is the search rank; without it, object key order is arbitrary.
+  const ranked = Object.values(pages)
+    .filter((page) => page?.title)
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
-  // Pull the year out of "2010 film" / "is a 2010 ... film".
-  const yearMatch = (desc.match(/(\d{4})\s+film/i) || extract.match(/\b(19|20)\d{2}\b/)) || [];
-  const foundYear = yearMatch[1] ? Number(yearMatch[0].match(/\d{4}/)[0]) : year || null;
+  const matches = ranked
+    .filter((page) => pageIsFilm(page) && titlesMatch(title, page.title))
+    .map((page) => ({ page, year: yearFromPage(page) }));
+  if (!matches.length) return null;
 
+  // Best match: the one whose year is what was asked for. Falling back to the
+  // top-ranked result rather than dropping the film, because a model that
+  // guessed the year wrong has still named a real film — replacing its guess
+  // with the truth is this layer's job, and always has been.
+  let best = matches[0];
+  if (year) {
+    const closest = matches
+      .filter((m) => m.year && Math.abs(m.year - year) <= REMAKE_GAP)
+      .sort((a, b) => Math.abs(a.year - year) - Math.abs(b.year - year))[0];
+    if (closest) best = closest;
+  }
+
+  const page = best.page;
   return {
     title: page.title.replace(/\s*\((?:\d{4}\s+)?film\)$/i, "").trim(),
-    year: foundYear,
+    year: best.year || year || null,
     poster: page.thumbnail?.source || "", // often absent → client shows a generated poster
-    overview: extract.slice(0, 300),
+    overview: (page.extract || "").slice(0, 300),
     rating: null,
     genre: "",
     source: "wikipedia",
