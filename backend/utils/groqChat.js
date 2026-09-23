@@ -89,6 +89,24 @@ function withSchema(body) {
   };
 }
 
+// Every way Groq says "the schema is why this failed".
+//
+// Two different failures wear the same 400, and both are ours to retry rather
+// than the upstream's to fix:
+//
+//   tool_use_failed     — schema decoding runs through the tool-calling path,
+//                         and the model answered with a tool call.
+//   json_validate_failed — a non-strict schema is validated AFTER generation,
+//                         so a model that reasons its way to slightly the
+//                         wrong shape (a year as "1995" rather than 1995) is
+//                         rejected wholesale, with what it generated in
+//                         `failed_generation`.
+//
+// The second one cost a production outage: its code names neither "json_schema"
+// nor "tool_use_failed", so it fell past this check, and a 400 is not transient,
+// so it was thrown on the spot. Seven of twelve ordinary requests died there —
+// and every one of them was answerable, because parseRecommendation coerces
+// exactly the sloppiness the validator refused.
 function schemaWasRejected(status, payload) {
   if (status !== 400) return false;
   const msg = JSON.stringify(payload || "").toLowerCase();
@@ -96,8 +114,35 @@ function schemaWasRejected(status, payload) {
     msg.includes("json_schema") ||
     msg.includes("response_format") ||
     msg.includes("tool_use_failed") ||
-    msg.includes("called a tool")
+    msg.includes("called a tool") ||
+    msg.includes("json_validate_failed") ||
+    msg.includes("failed_generation") ||
+    msg.includes("does not match the expected schema")
   );
+}
+
+// The generation Groq rejected, when it is usable anyway.
+//
+// A schema validated after the fact rejects the whole response over one field,
+// and hands back what the model wrote in `failed_generation`. That text is
+// almost always fine for our purposes — a year as "1995" rather than 1995, a
+// missing "why" on one row of eight — because parseRecommendation coerces and
+// drops per row rather than per response. Re-asking would spend another three
+// seconds and another few hundred tokens of a daily budget to get back
+// something we are already holding.
+//
+// The bar is only "is it JSON": this client has no idea what a good answer
+// looks like, and the caller already treats model output as untrusted input.
+// Anything that does not parse falls through to the retry below.
+export function salvageFailedGeneration(payload) {
+  const raw = payload?.error?.failed_generation;
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    JSON.parse(raw);
+  } catch {
+    return null; // truncated or prose: let the retry earn a clean answer
+  }
+  return { choices: [{ message: { content: raw }, finish_reason: "stop" }] };
 }
 
 export async function groqChat(body, { fetchImpl = fetch, apiKey = process.env.GROQ_API_KEY } = {}) {
@@ -158,6 +203,14 @@ export async function groqChat(body, { fetchImpl = fetch, apiKey = process.env.G
 
       // Our request was wrong, not the upstream: ask for less and try again.
       if (hadSchema && schemaWasRejected(response.status, payload)) {
+        // ...unless the rejected answer is sitting right there in the error.
+        const salvaged = salvageFailedGeneration(payload);
+        if (salvaged) {
+          workingModel = model;
+          trace.models.push(model);
+          trace.salvaged = true;
+          return { ...salvaged, trace };
+        }
         ({ request: payloadBody } = withSchema({ ...body, schema: undefined }));
         hadSchema = false;
         continue;

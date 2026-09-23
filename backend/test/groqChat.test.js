@@ -212,3 +212,65 @@ test("a rejected schema is dropped and the call retried without it", async () =>
   assert.ok(data.choices.length);
   assert.deepEqual(formats, ["json_schema", "json_object"]);
 });
+
+// The failure that took the recommender down in production for most of a
+// battery of twelve ordinary requests. Groq validates a non-strict schema
+// AFTER generation, so a model that reasons its way to slightly the wrong
+// shape gets a 400 with code `json_validate_failed` — a code that named
+// neither "json_schema" nor "tool_use_failed", so the degradation path did not
+// recognise it, and a 400 is not transient, so it was thrown on the spot.
+const validatorRejected = (generation) => ({
+  ok: false,
+  status: 400,
+  json: async () => ({
+    error: {
+      message: "Generated JSON does not match the expected schema. Please adjust your prompt.",
+      type: "invalid_request_error",
+      code: "json_validate_failed",
+      failed_generation: generation,
+    },
+  }),
+});
+
+test("a generation the validator rejected is used when it is still JSON", async () => {
+  // The whole response was thrown away over one field: a year as a string,
+  // which parseRecommendation coerces. Re-asking buys nothing but latency.
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  const generation = '{"reply":"Here are a few.","movies":[{"title":"Heat","year":"1995","why":"tense"}]}';
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    return validatorRejected(generation);
+  };
+
+  const data = await groqChat(
+    { messages: [], response_format: { type: "json_object" }, schema: { type: "object" } },
+    { fetchImpl, apiKey: "k" }
+  );
+  assert.equal(calls, 1, "the answer was already in hand; do not ask again");
+  assert.equal(data.choices[0].message.content, generation);
+  assert.ok(data.trace.salvaged);
+});
+
+test("a generation too broken to parse falls back to dropping the schema", async () => {
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  const formats = [];
+  const fetchImpl = async (_url, opts) => {
+    const body = JSON.parse(opts.body);
+    formats.push(body.response_format?.type);
+    if (body.response_format?.type === "json_schema") {
+      // Truncated mid-object: nothing to salvage here.
+      return validatorRejected('{"reply":"Here are a few.","movies":[{"title":"He');
+    }
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "{}" } }] }) };
+  };
+
+  const data = await groqChat(
+    { messages: [], response_format: { type: "json_object" }, schema: { type: "object" } },
+    { fetchImpl, apiKey: "k" }
+  );
+  assert.ok(data.choices.length, "the call should succeed without the schema");
+  assert.deepEqual(formats, ["json_schema", "json_object"]);
+});
