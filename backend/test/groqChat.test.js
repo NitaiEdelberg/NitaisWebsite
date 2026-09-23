@@ -274,3 +274,41 @@ test("a generation too broken to parse falls back to dropping the schema", async
   assert.ok(data.choices.length, "the call should succeed without the schema");
   assert.deepEqual(formats, ["json_schema", "json_object"]);
 });
+
+// The second half of the same outage. Dropping the schema does not stop this:
+// plain JSON mode refuses unparseable content with the same code, so the
+// retry came back `json_validate_failed` too — and by then the schema had
+// already been dropped, so the ladder had no rung left and threw. Five of
+// fifteen live requests died exactly there.
+//
+// What the model actually wrote, in every one of them, was a usable answer
+// with reasoning in front of it. gpt-oss narrates before it commits.
+test("an answer buried in a reasoning preamble is read, not thrown away", async () => {
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  const generation =
+    'The user wants something lighter than Interstellar. Let me think about tone.\n' +
+    '{"reply":"Try these.","movies":[{"title":"The Martian","year":2015,"why":"hopeful"}]}';
+  const calls = [];
+  const fetchImpl = async (_url, opts) => {
+    calls.push(JSON.parse(opts.body).response_format?.type);
+    return validatorRejected(generation);
+  };
+
+  const data = await groqChat(
+    { messages: [], response_format: { type: "json_object" }, schema: { type: "object" } },
+    { fetchImpl, apiKey: "k" }
+  );
+  assert.equal(calls.length, 1, "no reason to re-ask for something already written");
+  assert.deepEqual(JSON.parse(data.choices[0].message.content).movies[0].title, "The Martian");
+});
+
+test("a rejection with nothing readable in it still fails", async () => {
+  // Salvage must not turn every upstream failure into a fake success.
+  _resetWorkingModel();
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+  const fetchImpl = async () => validatorRejected("I cannot help with that request.");
+  await assert.rejects(
+    groqChat({ messages: [], schema: { type: "object" } }, { fetchImpl, apiKey: "k" })
+  );
+});

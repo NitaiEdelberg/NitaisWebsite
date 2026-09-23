@@ -133,16 +133,36 @@ function schemaWasRejected(status, payload) {
 //
 // The bar is only "is it JSON": this client has no idea what a good answer
 // looks like, and the caller already treats model output as untrusted input.
-// Anything that does not parse falls through to the retry below.
+// Anything unreadable falls through to the retry below.
+//
+// Read leniently, because the common way this output is "invalid" is a
+// reasoning model narrating before it answers — "The user wants something
+// lighter. Let me think... {json}". The JSON is right there and intact; it
+// just is not the whole string. So: try the string, then try the outermost
+// braces. Both are parsed, never evaluated, and what comes out still has to
+// survive validation and a film database afterwards.
 export function salvageFailedGeneration(payload) {
   const raw = payload?.error?.failed_generation;
   if (typeof raw !== "string" || !raw.trim()) return null;
-  try {
-    JSON.parse(raw);
-  } catch {
-    return null; // truncated or prose: let the retry earn a clean answer
+
+  const candidates = [raw];
+  const open = raw.indexOf("{");
+  const close = raw.lastIndexOf("}");
+  if (open !== -1 && close > open) candidates.push(raw.slice(open, close + 1));
+
+  for (const text of candidates) {
+    try {
+      const parsed = JSON.parse(text);
+      // An array or a bare string is not the shape any caller here asked for,
+      // and passing it on just moves the failure one stage later.
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return { choices: [{ message: { content: text }, finish_reason: "stop" }] };
+      }
+    } catch {
+      // try the next reading
+    }
   }
-  return { choices: [{ message: { content: raw }, finish_reason: "stop" }] };
+  return null; // truncated: let the retry earn a clean answer
 }
 
 export async function groqChat(body, { fetchImpl = fetch, apiKey = process.env.GROQ_API_KEY } = {}) {
@@ -201,16 +221,22 @@ export async function groqChat(body, { fetchImpl = fetch, apiKey = process.env.G
       lastError.status = response.status || 500;
       lastError.model = model;
 
+      // Before deciding what went wrong: if the upstream handed back the
+      // generation it refused, and it is readable, that IS the answer. Checked
+      // for every rejection rather than only schema ones, because dropping the
+      // schema does not stop this happening — plain JSON mode rejects
+      // unparseable content with the same code, and a ladder whose last rung
+      // throws away a perfectly good answer is not a ladder.
+      const salvaged = salvageFailedGeneration(payload);
+      if (salvaged) {
+        workingModel = model;
+        trace.models.push(model);
+        trace.salvaged = true;
+        return { ...salvaged, trace };
+      }
+
       // Our request was wrong, not the upstream: ask for less and try again.
       if (hadSchema && schemaWasRejected(response.status, payload)) {
-        // ...unless the rejected answer is sitting right there in the error.
-        const salvaged = salvageFailedGeneration(payload);
-        if (salvaged) {
-          workingModel = model;
-          trace.models.push(model);
-          trace.salvaged = true;
-          return { ...salvaged, trace };
-        }
         ({ request: payloadBody } = withSchema({ ...body, schema: undefined }));
         hadSchema = false;
         continue;
