@@ -206,6 +206,11 @@ function upstreamCode(error) {
 // The trace a user is allowed to see: counts, not prompts.
 function publicTrace(result) {
   return {
+    // Which wording produced this. The version exists so an answer can be
+    // attributed to a prompt, and that only works if it travels with the
+    // answer — it is also the one field that says which build is live, which
+    // is the difference between diagnosing a deploy and guessing at one.
+    prompt_version: result.prompt_version,
     // What was read as a hard requirement, and what it cost.
     constraint: result.trace.constraint?.label || null,
     dropped_outside_constraint:
