@@ -276,8 +276,10 @@ export default function RecommendChat() {
                 {turn.trace.source === "catalogue" && "from the film catalogue · "}
                 {turn.trace.proposed} suggested · {turn.trace.verified} verified as real
                 {turn.trace.unverifiable > 0 && ` · ${turn.trace.unverifiable} dropped as unverifiable`}
+                {/* Not "outside ${constraint}": the label already reads "from
+                    2026", which rendered as "outside from 2026". */}
                 {turn.trace.dropped_outside_constraint > 0 &&
-                  ` · ${turn.trace.dropped_outside_constraint} dropped for being outside ${turn.trace.constraint}`}
+                  ` · ${turn.trace.dropped_outside_constraint} dropped for the wrong year`}
                 {turn.trace.blocked_as_seen > 0 && ` · ${turn.trace.blocked_as_seen} you'd already seen`}
                 {turn.trace.preferences_used > 0 && ` · using ${turn.trace.preferences_used} things I know about your taste`}
               </Text>
