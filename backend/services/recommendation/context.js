@@ -30,6 +30,45 @@ export const LIMITS = {
   summaryChars: 700,
 };
 
+
+// Three sources compete for one bounded list, so each gets a share.
+//
+// This used to be one concatenation — rejected, owned, shown — truncated to
+// forty. Which meant the library filled the list before it ever reached
+// `shown`, so somebody owning forty films — exactly the person a watchlist app
+// is built for — got an avoid list containing none of what was just suggested.
+// The list is not only advice to the model: it is also the hard filter applied
+// to what comes back. So the recommender repeated itself, and the filter built
+// to stop that had been truncated away.
+//
+// Shares rather than a priority order, because all three matter and the failure
+// of a flat order is that the last source gets nothing. They sum to the budget;
+// an unused share is given away in the second pass rather than wasted.
+const AVOID_SHARES = [
+  // Turned down out loud: the strongest signal anybody gives here.
+  { key: "rejected", share: 12 },
+  // Suggested moments ago, newest first. The one whose absence reads as "this
+  // thing keeps showing me the same films".
+  { key: "shown", share: 14 },
+  // Already in the library. Suggesting one is a smaller sin than repeating.
+  { key: "owned", share: 14 },
+];
+
+export function budgetedAvoid(sources) {
+  const chosen = new Set();
+  for (const { key, share } of AVOID_SHARES) {
+    for (const title of (sources[key] || []).slice(0, share)) chosen.add(title);
+  }
+  // A source that did not use its share does not get to keep it.
+  for (const { key } of AVOID_SHARES) {
+    for (const title of sources[key] || []) {
+      if (chosen.size >= LIMITS.avoidTitles) break;
+      chosen.add(title);
+    }
+  }
+  return [...chosen].slice(0, LIMITS.avoidTitles);
+}
+
 /**
  * Assemble everything the prompt builder is allowed to use.
  *
@@ -47,15 +86,11 @@ export function buildContext({ message, session, library = {}, extraAvoid = [], 
     text: turn.text,
   }));
 
-  // Rejections first: "never show me this again" outranks "you have seen this".
-  const avoid = [
-    ...new Set([
-      ...(session?.rejected || []),
-      ...extraAvoid,
-      ...(library.owned || []),
-      ...(session?.shown || []),
-    ]),
-  ].slice(0, LIMITS.avoidTitles);
+  const avoid = budgetedAvoid({
+    rejected: [...(session?.rejected || []), ...extraAvoid],
+    shown: session?.shown || [],
+    owned: library.owned || [],
+  });
 
   return {
     message,

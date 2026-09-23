@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { recommend } from "../services/recommendation/index.js";
 import { parseRecommendation } from "../services/recommendation/validate.js";
 import { rankAndDiversify, scoreMovie } from "../services/recommendation/rank.js";
-import { buildContext, estimateTokens } from "../services/recommendation/context.js";
+import { LIMITS, buildContext, estimateTokens } from "../services/recommendation/context.js";
 import {
   activePreferences, mergePreferences, sanitise,
 } from "../services/recommendation/memory.js";
@@ -247,4 +247,27 @@ test("preferences outside the vocabulary are discarded", () => {
     "nonsense",
   ]);
   assert.deepEqual(clean, [{ kind: "genre", value: "noir", sentiment: "likes" }]);
+});
+
+// A watchlist app's best user has a big watchlist, and that is precisely who
+// this broke for. The avoid list was one concatenation truncated to forty, with
+// `shown` last — so past about forty owned films, nothing recently suggested
+// survived into it. That list is not only advice to the model; it is the hard
+// filter applied to what comes back. The recommender repeated itself, and the
+// filter built to stop that had been truncated away.
+test("a big library does not push recent suggestions out of the avoid list", () => {
+  const owned = Array.from({ length: 60 }, (_, i) => `Owned Film ${i + 1}`);
+  const session = {
+    preferences: [], messages: [], rejected: ["Turned Down"],
+    shown: ["Suggested Just Now", "Suggested A Moment Ago"],
+  };
+
+  const context = buildContext({ message: "something else", session, library: { owned, liked: [] } });
+
+  assert.ok(context.avoid.includes("Suggested Just Now"));
+  assert.ok(context.avoid.includes("Suggested A Moment Ago"));
+  assert.ok(context.avoid.includes("Turned Down"));
+  assert.ok(context.avoid.length <= LIMITS.avoidTitles);
+  // The library still gets most of the room; it just no longer gets all of it.
+  assert.ok(context.avoid.filter((t) => t.startsWith("Owned")).length >= 14);
 });
