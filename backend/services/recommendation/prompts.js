@@ -12,7 +12,7 @@
 
 import { GUARD, asData } from "../../utils/untrusted.js";
 
-export const PROMPT_VERSION = "recommend-v2";
+export const PROMPT_VERSION = "recommend-v3";
 
 // The shape the model must answer in. Sent as a schema where the provider
 // supports constrained decoding, and repeated in the prompt where it does not.
@@ -109,6 +109,8 @@ If the request is vague, commit to one reading of it rather than hedging across 
 "why" is one sentence, at most 20 words, about THIS request — not a plot summary. If they asked for something lighter, say what makes it lighter.
 
 "reply" is one or two sentences to the person, in the second person, as a human would say it. No lists, no markdown, no restating the titles.
+
+Never say how many films you are suggesting. You do not know that number: every title you name is checked against a film database first, anything unverifiable is dropped, and what survives is trimmed for variety. "Here are eight" above a list of five reads as a bug, because it is one.
 
 Return json: {"reply":"...","movies":[{"title":"exact released title","year":1999,"why":"..."}]}`);
 

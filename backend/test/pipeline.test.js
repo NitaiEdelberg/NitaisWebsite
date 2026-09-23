@@ -11,6 +11,7 @@ import { recommend } from "../services/recommendation/index.js";
 import { parseRecommendation } from "../services/recommendation/validate.js";
 import { rankAndDiversify, scoreMovie } from "../services/recommendation/rank.js";
 import { LIMITS, buildContext, estimateTokens } from "../services/recommendation/context.js";
+import { buildRecommendationPrompt } from "../services/recommendation/prompts.js";
 import {
   activePreferences, mergePreferences, sanitise,
 } from "../services/recommendation/memory.js";
@@ -270,4 +271,15 @@ test("a big library does not push recent suggestions out of the avoid list", () 
   assert.ok(context.avoid.length <= LIMITS.avoidTitles);
   // The library still gets most of the room; it just no longer gets all of it.
   assert.ok(context.avoid.filter((t) => t.startsWith("Owned")).length >= 14);
+});
+
+// Three of five working replies in a live battery opened with "Here are eight
+// …" above five cards. The model is asked for eight so that verification and
+// the variety trim have something to cut; what survives is usually five. The
+// count is decided two stages after the sentence is written, so the sentence
+// must not claim one.
+test("the model is told not to promise a number it cannot know", () => {
+  const context = buildContext({ message: "something funny", session: null, library: {} });
+  const prompt = buildRecommendationPrompt(context);
+  assert.match(prompt.user, /never say how many films/i);
 });
