@@ -37,6 +37,18 @@ before(async () => {
   // Both outside dependencies, swapped through the provider seam.
   setProviders({
     chat: async () => {
+      if (fake.failModel === "detailed") {
+        const e = new Error("AI API error");
+        e.status = 400;
+        e.details = {
+          error: {
+            message: "Tool choice is none, but model called a tool in organization org_01secret",
+            code: "tool_use_failed",
+            failed_generation: "{\"name\": \"x\"}",
+          },
+        };
+        throw e;
+      }
       if (fake.failModel) { const e = new Error("upstream down"); e.status = 503; throw e; }
       return {
         choices: [{ message: { content: JSON.stringify(fake.reply) } }],
@@ -318,4 +330,25 @@ test("security headers are set on every response", async () => {
   assert.equal(res.headers.get("x-content-type-options"), "nosniff");
   assert.equal(res.headers.get("x-frame-options"), "DENY");
   assert.ok(res.headers.get("x-request-id"), "and every response is traceable");
+});
+
+test("an upstream failure returns its error code, and never its body", async () => {
+  // Diagnosing this from the outside took two wrong guesses — a stale build and
+  // a missing key — because the response said only "unavailable". The code is
+  // safe to return; the body is not, since it carries the organisation id and
+  // echoes the request back.
+  const token = await signUp("upstream@example.com");
+  const previous = fake.failModel;
+  fake.failModel = "detailed";
+
+  const res = await call("/api/ai/recommend", { method: "POST", token, body: { message: "anything" } });
+  const body = await res.json();
+
+  assert.equal(body.upstream.status, 400);
+  assert.equal(body.upstream.code, "tool_use_failed");
+  const serialised = JSON.stringify(body);
+  assert.ok(!serialised.includes("org_"), "no organisation id reaches the client");
+  assert.ok(!serialised.includes("failed_generation"), "and no echo of the request");
+
+  fake.failModel = previous;
 });

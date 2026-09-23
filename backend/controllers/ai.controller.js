@@ -113,6 +113,11 @@ export const getMovieRecommendation = async (req, res) => {
 
     return res.status(status === 429 ? 429 : status).json({
       success: false,
+      // The upstream's own status and error CODE, so a failure can be
+      // diagnosed from a response instead of from a log nobody can reach.
+      // Codes only — "invalid_api_key", "model_not_found", "tool_use_failed" —
+      // never the body, which carries organisation ids and echoes the request.
+      upstream: { status, code: upstreamCode(error) },
       message:
         error.userMessage ||
         (misconfigured
@@ -183,6 +188,20 @@ export const forgetMemory = async (req, res) => {
     return res.status(500).json({ success: false, message: "Could not clear your preferences." });
   }
 };
+
+// The provider's error code, if it gave one. Codes are safe to return: they
+// name the class of failure and contain no identifiers. The body is not — it
+// includes the organisation id and, on a 400, an echo of what was sent.
+function upstreamCode(error) {
+  const details = error?.details;
+  if (!details) return null;
+  const code = details?.error?.code || details?.code;
+  if (code) return String(code).slice(0, 60);
+  const message = details?.error?.message || "";
+  // Fall back to the first few words, which name the problem without the ids
+  // that follow it.
+  return message ? String(message).split(/[.:(]/)[0].trim().slice(0, 80) : null;
+}
 
 // The trace a user is allowed to see: counts, not prompts.
 function publicTrace(result) {
