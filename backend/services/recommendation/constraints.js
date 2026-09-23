@@ -48,6 +48,8 @@ const PATTERNS = [
   [/\beighties\b/i, () => ({ min: 1980, max: 1989, label: "from the 1980s" })],
   [/\bseventies\b/i, () => ({ min: 1970, max: 1979, label: "from the 1970s" })],
   [/\bsixties\b/i, () => ({ min: 1960, max: 1969, label: "from the 1960s" })],
+  [/\bfifties\b/i, () => ({ min: 1950, max: 1959, label: "from the 1950s" })],
+  [/\bforties\b/i, () => ({ min: 1940, max: 1949, label: "from the 1940s" })],
 
   // A specific year, qualified or bare.
   [/\b(?:from|in|of)\s+((?:19|20)\d{2})\b/i, (m) => ({ min: +m[1], max: +m[1], label: `from ${m[1]}` })],

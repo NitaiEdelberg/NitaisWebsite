@@ -173,3 +173,19 @@ test("a reply with neither text nor films is still a failure", async () => {
     (err) => err.status === 502
   );
 });
+
+// The list stopped at "sixties", so "classic french thrillers from the
+// fifties" extracted no constraint at all — nothing told the model, and
+// nothing enforced afterwards. It complied anyway, which is the failure mode
+// worth naming: a constraint that works only because the model felt like it
+// is not a constraint.
+test("decades are read as far back as people ask for them", () => {
+  assert.deepEqual(
+    extractConstraints("classic french thrillers from the fifties").year,
+    { min: 1950, max: 1959, label: "from the 1950s" }
+  );
+  assert.deepEqual(
+    extractConstraints("a noir from the forties").year,
+    { min: 1940, max: 1949, label: "from the 1940s" }
+  );
+});
