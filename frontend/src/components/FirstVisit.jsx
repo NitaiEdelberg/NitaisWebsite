@@ -18,7 +18,7 @@ import { markTourSeen, shouldShowTour } from "../utils/tourState";
 const STEPS = [
   {
     title: "Add what you watch",
-    body: "A title and a year is enough. Give it a score out of ten and a note about why it stuck with you — the note is the part you will be glad of in a year.",
+    body: "A title and a year is enough. Give it a score out of ten and a note about why it stuck with you. The note is the part you will be glad of in a year.",
   },
   {
     title: "Or describe a mood",

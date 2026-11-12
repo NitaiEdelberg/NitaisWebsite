@@ -233,7 +233,7 @@ export default function RecommendChat() {
         {empty && !busy && (
           <VStack align="stretch" spacing={3}>
             <Text color="text.muted" fontSize="sm">
-              Describe a mood rather than a genre — it works better. Then keep talking:
+              Describe a mood rather than a genre; it works better. Then keep talking:
               say &ldquo;lighter&rdquo;, &ldquo;seen it&rdquo;, or &ldquo;more like the second one&rdquo;.
             </Text>
             <Wrap>
@@ -311,7 +311,7 @@ export default function RecommendChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder={empty ? "e.g. something quiet for a rainy night" : "Refine it — lighter, older, weirder…"}
+          placeholder={empty ? "e.g. something quiet for a rainy night" : "Refine it: lighter, older, weirder…"}
           bg="bg.canvas"
           aria-label="Describe what you want to watch"
           isDisabled={busy}

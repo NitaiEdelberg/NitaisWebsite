@@ -114,7 +114,7 @@ const Landing = () => (
         <Text fontSize={{ base: "md", md: "lg" }} color="text.muted" maxW="34rem">
           Describe what you feel like watching and keep talking until it gets there.
           Every suggestion is checked against a real film database before it reaches
-          you — so nothing it recommends is invented, and it never offers a film
+          you, so nothing it recommends is invented, and it never offers a film
           you have already saved.
         </Text>
 
@@ -222,7 +222,7 @@ const Landing = () => (
         <Heading as="h3" size="sm" mb={1}>Why the checking matters</Heading>
         <Text color="text.muted" fontSize="sm" maxW="60rem">
           Ask any chatbot for film recommendations and some of what comes back will not
-          exist — a plausible title, a plausible year, a plausible director, and no such
+          exist: a plausible title, a plausible year, a plausible director, and no such
           film. Here the model only proposes; a film database decides what is real, and
           whatever fails is dropped before you see it. The count of what was dropped is
           shown with every answer, because a claim you cannot check is just a claim.
