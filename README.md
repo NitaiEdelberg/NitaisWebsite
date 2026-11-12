@@ -8,7 +8,7 @@
 
 A watchlist you keep, with a film recommender that **cannot invent films**.
 
-Describe a mood — "something quiet for a rainy night" — and keep talking until
+Describe a mood ("something quiet for a rainy night") and keep talking until
 it gets there. The model proposes titles; a real film database decides which
 exist; anything it made up is dropped before you see it, and the count of what
 was dropped is printed under every answer.
@@ -16,13 +16,15 @@ was dropped is printed under every answer.
 🌐 **[Try it](https://nitaiswebsite.onrender.com)** · 📐 **[Architecture and the
 decisions behind it](docs/ARCHITECTURE.md)**
 
+![Nitai's Movie Library landing page: a film recommender that cannot make things up](docs/screenshot.png)
+
 ---
 
 ## Why this is interesting
 
 Ask any chatbot for film recommendations and some of what comes back does not
 exist: a plausible title, a plausible year, a plausible director, and no such
-film. That is not a bug in the prompt, it is what a language model does — and it
+film. That is not a bug in the prompt, it is what a language model does, and it
 is the reason this project treats the model as one stage of a pipeline rather
 than as the answer.
 
@@ -49,19 +51,19 @@ its working:
 them out of ten, and write a private note about why one stuck with you. Search,
 sort and filter. Every library is private to its account, enforced server-side.
 
-**The recommender.** A conversation, not a form. Ask for a mood, then refine —
+**The recommender.** A conversation, not a form. Ask for a mood, then refine:
 "lighter", "seen it", "more like the second one". It remembers across sessions:
 
 - what it has already shown you, so the same five films do not come back;
 - what you own, so it never suggests a film already in your library;
 - what you turned down;
-- what you told it about your taste — and separately, what it has merely
+- what you told it about your taste, and separately, what it has merely
   guessed, which needs to recur three times before it counts.
 
 **Constraints are enforced, not hoped for.** Ask for "a comedy from the 90s" and
 anything outside 1990–1999 is dropped after verification, with the count shown.
 Ask for something newer than the model can possibly know about and it either
-looks it up in a real catalogue or tells you it cannot — rather than quietly
+looks it up in a real catalogue or tells you it cannot, rather than quietly
 answering with a film from 1999.
 
 **What it shows you.** The model's one-line reason is labelled *why this*;
@@ -78,7 +80,7 @@ preference it holds, whether you stated it or it was inferred, and how strongly.
 - **Backend:** Express 5 on Node 20
 - **Database:** MongoDB Atlas (Mongoose)
 - **Model:** Groq (`openai/gpt-oss-120b`, with a fallback chain)
-- **Verification:** TMDb when a key is set, Wikipedia when not — the keyless
+- **Verification:** TMDb when a key is set, Wikipedia when not. The keyless
   path is the tested default, not a stub
 - **Deployment:** Render (long-lived Node) or Netlify (serverless function) from
   the same codebase
@@ -136,7 +138,7 @@ PORT=5000
 
 # AI recommendations
 GROQ_API_KEY=your-groq-key         # required for the "recommend a movie" feature
-TMDB_API_KEY=your-tmdb-key         # optional — enables real posters + best data
+TMDB_API_KEY=your-tmdb-key         # optional: enables real posters + best data
 ```
 
 The AI feature proposes candidate titles with Groq, then **grounds** each one in
@@ -190,7 +192,7 @@ npm run start
 ## API
 
 Every route below `/api/movies` and `/api/ai` requires a bearer token, and every
-query is scoped to the authenticated user — never to an id in the request.
+query is scoped to the authenticated user, never to an id in the request.
 
 | Method | Endpoint | Notes |
 |---|---|---|
@@ -198,10 +200,10 @@ query is scoped to the authenticated user — never to an id in the request.
 | POST | `/api/auth/login` | Returns a 7-day JWT. Rate limited, 20 per 15 min per IP |
 | GET | `/api/movies?page=1&limit=100` | Paged, newest first, owner id never returned |
 | POST | `/api/movies` | Validates year and score; the document is built field by field, so a `user` in the body is ignored |
-| PUT | `/api/movies/:id` | Scoped to the owner — somebody else's id is a 404, not a success |
+| PUT | `/api/movies/:id` | Scoped to the owner: somebody else's id is a 404, not a success |
 | DELETE | `/api/movies/:id` | Same |
 | POST | `/api/ai/recommend` | The conversation. Rate limited, 12/min per user |
-| POST | `/api/ai/reject` | "Not for me" — blocks that title, and counts weakly against its genre |
+| POST | `/api/ai/reject` | "Not for me": blocks that title, and counts weakly against its genre |
 | GET | `/api/ai/memory` | Everything remembered about your taste, and whether you said it or it was inferred |
 | DELETE | `/api/ai/memory` | Forget all of it |
 | GET | `/api/health` | Liveness, touching no database |
@@ -265,7 +267,7 @@ Written down rather than discovered:
   On several instances both become per-instance and the numbers need dividing.
 - **Netlify functions time out at 10 seconds.** The library is well under one; a
   recommendation has measured 3–15 because it verifies every title. If that
-  starts timing out, `/api/ai/*` can stay on Render with one redirect — written
+  starts timing out, `/api/ai/*` can stay on Render with one redirect, as written
   out in [docs/DEPLOY_NETLIFY.md](docs/DEPLOY_NETLIFY.md).
 - **Preference extraction is a model call**, so it can be wrong. Its blast
   radius is bounded: a closed vocabulary, a repetition threshold for inferences,
@@ -281,12 +283,6 @@ Written down rather than discovered:
 
 - Public sharing of movie lists
 - Upload real image files instead of URL
-
----
-
-## 📸 Screenshot
-
-![App Screenshot](./frontend/public/screenshot.png)
 
 ---
 
